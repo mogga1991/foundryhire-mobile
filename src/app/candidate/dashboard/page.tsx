@@ -1,32 +1,37 @@
 import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
 import { Briefcase, Calendar, Clock, MessageSquare } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { getCandidateUser } from '@/lib/auth/get-candidate-user'
+import { CandidateNav } from '@/components/candidate/candidate-nav'
 
 export const metadata: Metadata = {
   title: 'Dashboard - VerticalHire Candidate',
   description: 'View your job applications and opportunities',
 }
 
-export default function CandidateDashboardPage() {
+export default async function CandidateDashboardPage() {
+  const user = await getCandidateUser()
+
+  if (!user) {
+    redirect('/candidate/login')
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50">
-      {/* Header with Orange Theme */}
-      <header className="bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold">Welcome back!</h1>
-              <p className="text-orange-100 mt-1">Your construction career dashboard</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-orange-100">Candidate Portal</span>
-            </div>
-          </div>
-        </div>
-      </header>
+      <CandidateNav user={user} />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Welcome Message */}
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900">
+            Welcome back, {user.firstName}! 👋
+          </h2>
+          <p className="text-gray-600 mt-2">
+            Here's an overview of your construction career opportunities
+          </p>
+        </div>
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card className="border-orange-200 shadow-md hover:shadow-lg transition-shadow">
