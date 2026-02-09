@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Loader2, Upload, User, Briefcase, MapPin, Phone, Linkedin, FileText, Award } from 'lucide-react'
+import { Loader2, Upload, User, Briefcase, MapPin, Phone, Linkedin, FileText, Award, Trash2, ExternalLink } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,6 +59,8 @@ export function CandidateProfileForm({ user }: CandidateProfileFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [isUploadingResume, setIsUploadingResume] = useState(false)
+  const [isDeletingResume, setIsDeletingResume] = useState(false)
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -124,10 +126,68 @@ export function CandidateProfileForm({ user }: CandidateProfileFormProps) {
       return
     }
 
-    // TODO: Implement resume upload
-    toast.info('Coming soon', {
-      description: 'Resume upload functionality will be available soon!',
-    })
+    setIsUploadingResume(true)
+    try {
+      const formData = new FormData()
+      formData.append('resume', resumeFile)
+
+      const res = await fetch('/api/candidate/resume/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Failed to upload resume')
+      }
+
+      toast.success('Resume uploaded!', {
+        description: 'Your resume has been uploaded successfully.',
+      })
+
+      setResumeFile(null)
+      router.refresh()
+    } catch (error) {
+      console.error('Resume upload error:', error)
+      toast.error('Failed to upload resume', {
+        description: error instanceof Error ? error.message : 'Please try again',
+      })
+    } finally {
+      setIsUploadingResume(false)
+    }
+  }
+
+  async function handleDeleteResume() {
+    if (!confirm('Are you sure you want to delete your resume? This action cannot be undone.')) {
+      return
+    }
+
+    setIsDeletingResume(true)
+    try {
+      const res = await fetch('/api/candidate/resume/upload', {
+        method: 'DELETE',
+      })
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Failed to delete resume')
+      }
+
+      toast.success('Resume deleted', {
+        description: 'Your resume has been removed.',
+      })
+
+      router.refresh()
+    } catch (error) {
+      console.error('Resume delete error:', error)
+      toast.error('Failed to delete resume', {
+        description: error instanceof Error ? error.message : 'Please try again',
+      })
+    } finally {
+      setIsDeletingResume(false)
+    }
   }
 
   return (
@@ -454,36 +514,77 @@ export function CandidateProfileForm({ user }: CandidateProfileFormProps) {
         <CardContent className="space-y-4">
           {user.resumeUrl && (
             <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-              <p className="text-sm text-orange-900 font-medium mb-2">Current Resume:</p>
-              <a
-                href={user.resumeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-orange-600 hover:text-orange-700 underline"
-              >
-                View Resume
-              </a>
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-sm text-orange-900 font-medium mb-2">Current Resume</p>
+                  <a
+                    href={user.resumeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 underline"
+                  >
+                    View Resume
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleDeleteResume}
+                  variant="outline"
+                  size="sm"
+                  disabled={isDeletingResume}
+                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                >
+                  {isDeletingResume ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           )}
 
-          <div className="flex items-center gap-4">
+          <div className="space-y-2">
             <Input
               type="file"
               accept=".pdf,.doc,.docx"
               onChange={(e) => setResumeFile(e.target.files?.[0] || null)}
               className="focus-visible:ring-orange-500"
+              disabled={isUploadingResume}
             />
-            <Button
-              type="button"
-              onClick={handleResumeUpload}
-              variant="outline"
-              disabled={!resumeFile}
-              className="border-orange-200 hover:bg-orange-50"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload
-            </Button>
+            {resumeFile && (
+              <p className="text-sm text-gray-600">
+                Selected: {resumeFile.name} ({(resumeFile.size / 1024 / 1024).toFixed(2)} MB)
+              </p>
+            )}
           </div>
+
+          <Button
+            type="button"
+            onClick={handleResumeUpload}
+            disabled={!resumeFile || isUploadingResume}
+            className="w-full bg-orange-600 hover:bg-orange-700"
+          >
+            {isUploadingResume ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4 mr-2" />
+                {user.resumeUrl ? 'Replace Resume' : 'Upload Resume'}
+              </>
+            )}
+          </Button>
+
           <p className="text-xs text-muted-foreground">
             Accepted formats: PDF, DOC, DOCX (Max 5MB)
           </p>
