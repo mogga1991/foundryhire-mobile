@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ResendVerificationButton } from '@/components/candidate/resend-verification-button'
 
 export const metadata: Metadata = {
   title: 'Verify Your Email - VerticalHire',
@@ -104,15 +105,7 @@ export default function CandidateVerifyEmailPage() {
             <div className="text-center">
               <p className="text-sm text-muted-foreground">
                 Didn't receive the email?{' '}
-                <button
-                  className="font-medium text-orange-600 hover:text-orange-700 transition-colors"
-                  onClick={() => {
-                    // TODO: Implement resend verification email
-                    alert('Resend verification email functionality coming soon!')
-                  }}
-                >
-                  Resend verification link
-                </button>
+                <ResendVerificationButton />
               </p>
             </div>
           </CardContent>
