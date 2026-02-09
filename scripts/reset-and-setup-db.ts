@@ -54,7 +54,7 @@ async function resetAndSetupDatabase() {
     // Create company
     const [company] = await sql`
       INSERT INTO companies (name, industry_sector, company_size, website)
-      VALUES ('TalentForge Demo', 'Technology', '11-50', 'https://talentforge.com')
+      VALUES ('VerticalHire Demo', 'Technology', '11-50', 'https://verticalhire.com')
       RETURNING id, name
     `
 

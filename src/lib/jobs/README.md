@@ -222,4 +222,4 @@ Free-Tier Orchestrator
 
 ## License
 
-Part of TalentForge application.
+Part of VerticalHire application.

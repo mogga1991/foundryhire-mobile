@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-08
 
-This document summarizes all the improvements and enhancements made to the VerticalHire (TalentForge) codebase.
+This document summarizes all the improvements and enhancements made to the VerticalHire codebase.
 
 ---
 

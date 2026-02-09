@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 
 /**
- * Zoom Integration for TalentForge
+ * Zoom Integration for VerticalHire
  *
  * This module handles:
  * 1. Creating Zoom meetings via Server-to-Server OAuth

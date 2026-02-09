@@ -17,7 +17,7 @@ async function setupStripeProducts() {
     // Create Starter Plan
     console.log('Creating Starter plan...')
     const starterProduct = await stripe.products.create({
-      name: 'TalentForge Starter',
+      name: 'VerticalHire Starter',
       description: 'Perfect for small teams getting started with AI-powered recruiting',
       metadata: {
         tier: 'starter',
@@ -41,7 +41,7 @@ async function setupStripeProducts() {
     // Create Professional Plan
     console.log('Creating Professional plan...')
     const professionalProduct = await stripe.products.create({
-      name: 'TalentForge Professional',
+      name: 'VerticalHire Professional',
       description: 'Advanced features for growing recruitment teams',
       metadata: {
         tier: 'professional',
@@ -65,7 +65,7 @@ async function setupStripeProducts() {
     // Create Enterprise Plan
     console.log('Creating Enterprise plan...')
     const enterpriseProduct = await stripe.products.create({
-      name: 'TalentForge Enterprise',
+      name: 'VerticalHire Enterprise',
       description: 'Full-featured solution for enterprise recruitment needs',
       metadata: {
         tier: 'enterprise',

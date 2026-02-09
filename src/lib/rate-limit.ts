@@ -50,7 +50,7 @@ if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) 
     redis,
     limiter: Ratelimit.slidingWindow(10, '10 s'), // 10 requests per 10 seconds
     analytics: true,
-    prefix: '@talentforge/ratelimit',
+    prefix: '@verticalhire/ratelimit',
   })
   logger.info('Rate limiter initialized with Redis')
 } else {

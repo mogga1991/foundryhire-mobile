@@ -36,7 +36,7 @@ A modern construction workforce management platform built with Next.js, custom a
 1. Clone the repository:
 ```bash
 git clone <your-repo-url>
-cd talentforge
+cd verticalhire
 ```
 
 2. Install dependencies:
@@ -75,7 +75,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## Project Structure
 
 ```
-talentforge/
+verticalhire/
 ├── src/
 │   ├── app/              # Next.js app router pages
 │   │   ├── (auth)/       # Authentication pages

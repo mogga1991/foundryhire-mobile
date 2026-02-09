@@ -1,10 +1,10 @@
 # Zoom Meeting SDK Integration Setup
 
-This guide will help you set up Zoom Meeting SDK integration for TalentForge to enable embedded video interviews.
+This guide will help you set up Zoom Meeting SDK integration for VerticalHire to enable embedded video interviews.
 
 ## Overview
 
-TalentForge uses two types of Zoom apps:
+VerticalHire uses two types of Zoom apps:
 1. **Meeting SDK App** - For embedding video calls in the browser
 2. **Server-to-Server OAuth App** - For creating meetings programmatically via API
 
@@ -13,7 +13,7 @@ TalentForge uses two types of Zoom apps:
 1. Go to [Zoom App Marketplace](https://marketplace.zoom.us/develop/create)
 2. Click **"Create"** and select **"Meeting SDK"** app type
 3. Fill in app information:
-   - **App Name**: TalentForge Interview SDK
+   - **App Name**: VerticalHire Interview SDK
    - **Company Name**: Your company name
    - **Developer Name**: Your name
    - **Developer Email**: Your email
@@ -28,7 +28,7 @@ TalentForge uses two types of Zoom apps:
 1. Go to [Zoom App Marketplace](https://marketplace.zoom.us/develop/create)
 2. Click **"Create"** and select **"Server-to-Server OAuth"** app type
 3. Fill in app information:
-   - **App Name**: TalentForge Meeting API
+   - **App Name**: VerticalHire Meeting API
    - **Company Name**: Your company name
    - **Developer Name**: Your name
    - **Developer Email**: Your email
@@ -87,7 +87,7 @@ Or add them via the Vercel dashboard:
 
 ## Features
 
-Once configured, TalentForge will:
+Once configured, VerticalHire will:
 
 ✅ Automatically create Zoom meetings when scheduling video interviews
 ✅ Embed video calls directly in the interview page (no external Zoom client needed)
@@ -122,6 +122,6 @@ For Zoom SDK documentation:
 - [Meeting SDK Web Reference](https://developers.zoom.us/docs/meeting-sdk/web/)
 - [Server-to-Server OAuth Guide](https://developers.zoom.us/docs/internal-apps/s2s-oauth/)
 
-For TalentForge support:
+For VerticalHire support:
 - Check the codebase documentation
 - Review the implementation in `/src/lib/integrations/zoom.ts`

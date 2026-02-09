@@ -286,7 +286,7 @@ Leads are stored in the `candidates` table with these key fields:
 
 ## Integration with Existing Workflow
 
-This system seamlessly integrates with your existing TalentForge workflow:
+This system seamlessly integrates with your existing VerticalHire workflow:
 
 1. **Job Creation** → Auto-generate leads
 2. **Lead Review** → Candidates appear in job pipeline

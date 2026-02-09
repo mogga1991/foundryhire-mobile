@@ -36,10 +36,10 @@ async function setupCompany() {
     const [company] = await db
       .insert(companies)
       .values({
-        name: 'TalentForge Demo',
+        name: 'VerticalHire Demo',
         industrySector: 'Technology',
         companySize: '11-50',
-        website: 'https://talentforge.com',
+        website: 'https://verticalhire.com',
       })
       .returning()
 
