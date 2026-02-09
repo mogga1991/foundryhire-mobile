@@ -443,6 +443,36 @@ export const emailSuppressions = pgTable('email_suppressions', {
   uniqueIndex('email_suppressions_company_email_idx').on(table.companyId, table.email),
 ])
 
+// Candidate Users - separate from candidates table (which are job applicants)
+// This table stores candidate user accounts for candidate portal authentication
+export const candidateUsers = pgTable('candidate_users', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  firstName: text('first_name').notNull(),
+  lastName: text('last_name').notNull(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  emailVerified: boolean('email_verified').default(false),
+  verificationToken: text('verification_token'),
+  verificationTokenExpiry: timestamp('verification_token_expiry', { withTimezone: true }),
+  resetPasswordToken: text('reset_password_token'),
+  resetPasswordExpiry: timestamp('reset_password_expiry', { withTimezone: true }),
+  profileImageUrl: text('profile_image_url'),
+  phone: text('phone'),
+  location: text('location'),
+  currentTitle: text('current_title'),
+  currentCompany: text('current_company'),
+  linkedinUrl: text('linkedin_url'),
+  resumeUrl: text('resume_url'),
+  bio: text('bio'),
+  skills: text('skills').array(),
+  experienceYears: integer('experience_years'),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('candidate_users_email_idx').on(table.email),
+])
+
 export const campaignFollowUps = pgTable('campaign_follow_ups', {
   id: uuid('id').defaultRandom().primaryKey(),
   campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
