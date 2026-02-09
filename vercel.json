@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/email/process?batchSize=50",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/email/follow-ups/process",
+      "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/enrichment/process?batchSize=50",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

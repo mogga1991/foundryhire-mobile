@@ -1,0 +1,88 @@
+<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f97316;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ea580c;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGradient)"/>
+
+  <!-- Subtle grid pattern -->
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#334155" stroke-width="0.5" opacity="0.3"/>
+  </pattern>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+
+  <!-- Construction hard hat icon (left side) -->
+  <g transform="translate(150, 200)">
+    <!-- Hard hat -->
+    <path d="M 0 80 Q 0 20, 60 0 Q 120 20, 120 80 L 120 100 L 0 100 Z"
+          fill="url(#accentGradient)" opacity="0.9"/>
+    <!-- Brim -->
+    <rect x="-10" y="100" width="140" height="20" rx="3" fill="#f97316" opacity="0.9"/>
+    <!-- AI circuit lines on hat -->
+    <circle cx="35" cy="50" r="3" fill="#fff" opacity="0.6"/>
+    <circle cx="60" cy="40" r="3" fill="#fff" opacity="0.6"/>
+    <circle cx="85" cy="50" r="3" fill="#fff" opacity="0.6"/>
+    <line x1="35" y1="50" x2="60" y2="40" stroke="#fff" stroke-width="1.5" opacity="0.6"/>
+    <line x1="60" y1="40" x2="85" y2="50" stroke="#fff" stroke-width="1.5" opacity="0.6"/>
+  </g>
+
+  <!-- Main content area -->
+  <g transform="translate(350, 0)">
+    <!-- VerticalHire branding -->
+    <text x="0" y="200" font-family="system-ui, -apple-system, sans-serif"
+          font-size="72" font-weight="800" fill="#ffffff">
+      VerticalHire
+    </text>
+
+    <!-- Tagline -->
+    <text x="0" y="260" font-family="system-ui, -apple-system, sans-serif"
+          font-size="32" font-weight="500" fill="#94a3b8">
+      AI-Powered Construction Recruiting
+    </text>
+
+    <!-- Key benefits -->
+    <g transform="translate(0, 320)">
+      <!-- Checkmark icon 1 -->
+      <circle cx="12" cy="12" r="12" fill="#22c55e" opacity="0.2"/>
+      <path d="M 6 12 L 10 16 L 18 8" stroke="#22c55e" stroke-width="2.5"
+            fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="35" y="18" font-family="system-ui, -apple-system, sans-serif"
+            font-size="22" font-weight="500" fill="#e2e8f0">
+        Source &amp; Score Top Talent with AI
+      </text>
+
+      <!-- Checkmark icon 2 -->
+      <g transform="translate(0, 50)">
+        <circle cx="12" cy="12" r="12" fill="#22c55e" opacity="0.2"/>
+        <path d="M 6 12 L 10 16 L 18 8" stroke="#22c55e" stroke-width="2.5"
+              fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="35" y="18" font-family="system-ui, -apple-system, sans-serif"
+              font-size="22" font-weight="500" fill="#e2e8f0">
+          Automated Outreach Campaigns
+        </text>
+      </g>
+
+      <!-- Checkmark icon 3 -->
+      <g transform="translate(0, 100)">
+        <circle cx="12" cy="12" r="12" fill="#22c55e" opacity="0.2"/>
+        <path d="M 6 12 L 10 16 L 18 8" stroke="#22c55e" stroke-width="2.5"
+              fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="35" y="18" font-family="system-ui, -apple-system, sans-serif"
+              font-size="22" font-weight="500" fill="#e2e8f0">
+          Hire Without Traditional Recruiters
+        </text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="610" width="1200" height="20" fill="url(#accentGradient)"/>
+</svg>
