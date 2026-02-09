@@ -19,6 +19,7 @@ const publicRoutes = [
   '/api/candidate',
   '/api/track',
   '/api/portal',
+  '/api/admin',
   '/api/email/unsubscribe',
   '/api/email/connect/gmail/callback',
   '/api/email/connect/microsoft/callback',
