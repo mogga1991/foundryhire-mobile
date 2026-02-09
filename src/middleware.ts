@@ -33,15 +33,25 @@ function isPublicRoute(pathname: string): boolean {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const sessionToken = request.cookies.get('session_token')?.value
+  const employerSessionToken = request.cookies.get('session_token')?.value
+  const candidateSessionToken = request.cookies.get('candidate_session_token')?.value
 
   // Allow public routes
   if (isPublicRoute(pathname)) {
     return NextResponse.next()
   }
 
-  // Redirect to login if no session
-  if (!sessionToken) {
+  // Candidate routes require candidate session
+  if (pathname.startsWith('/candidate')) {
+    if (!candidateSessionToken) {
+      const loginUrl = new URL('/candidate/login', request.url)
+      return NextResponse.redirect(loginUrl)
+    }
+    return NextResponse.next()
+  }
+
+  // Employer routes require employer session
+  if (!employerSessionToken) {
     const loginUrl = new URL('/login', request.url)
     return NextResponse.redirect(loginUrl)
   }

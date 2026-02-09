@@ -473,6 +473,21 @@ export const candidateUsers = pgTable('candidate_users', {
   uniqueIndex('candidate_users_email_idx').on(table.email),
 ])
 
+// Employer reach-outs to candidates
+export const candidateReachOuts = pgTable('candidate_reach_outs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  candidateId: uuid('candidate_id').notNull().references(() => candidateUsers.id, { onDelete: 'cascade' }),
+  employerId: uuid('employer_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
+  message: text('message').notNull(),
+  status: text('status').notNull().default('sent'), // sent, read, replied
+  readAt: timestamp('read_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('candidate_reach_outs_candidate_idx').on(table.candidateId),
+  index('candidate_reach_outs_employer_idx').on(table.employerId),
+])
+
 export const campaignFollowUps = pgTable('campaign_follow_ups', {
   id: uuid('id').defaultRandom().primaryKey(),
   campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
