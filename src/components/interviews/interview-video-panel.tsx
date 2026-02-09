@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import {
   Video,
   Mic,
@@ -17,7 +18,24 @@ import {
   Clock,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { ZoomMeetingEmbed } from './zoom-meeting-embed'
+
+// Import Zoom component with SSR disabled
+const ZoomMeetingEmbed = dynamic(
+  () => import('./zoom-meeting-embed').then(mod => ({ default: mod.ZoomMeetingEmbed })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="relative w-full h-full bg-gray-900 rounded-2xl overflow-hidden">
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
+          <div className="text-center text-white">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-sm text-gray-400">Loading meeting...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+)
 
 interface InterviewQuestion {
   id: string

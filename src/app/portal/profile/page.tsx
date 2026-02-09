@@ -13,7 +13,7 @@ export default async function CandidateProfilePage() {
   const user = await getCandidateUser()
 
   if (!user) {
-    redirect('/candidate/login')
+    redirect('/portal/login')
   }
 
   return (

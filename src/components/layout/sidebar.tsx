@@ -12,6 +12,7 @@ import {
   LogOut,
   ChevronLeft,
   Flame,
+  Inbox,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -53,6 +54,11 @@ const navLinks = [
     label: 'Candidates',
     href: '/candidates',
     icon: Users,
+  },
+  {
+    label: 'Inbox',
+    href: '/inbox',
+    icon: Inbox,
   },
   {
     label: 'Interviews',

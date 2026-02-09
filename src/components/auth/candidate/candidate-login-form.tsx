@@ -51,7 +51,7 @@ export function CandidateLoginForm() {
     setIsLoading(true)
 
     try {
-      const res = await fetch('/api/candidate/auth/login', {
+      const res = await fetch('/api/portal/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -83,7 +83,7 @@ export function CandidateLoginForm() {
         description: 'You have been signed in successfully.',
       })
 
-      router.push('/candidate/dashboard')
+      router.push('/portal/dashboard')
     } catch (err) {
       console.error('[Candidate Login Error]', err)
       toast.error('Sign in failed', {
@@ -166,7 +166,7 @@ export function CandidateLoginForm() {
                         <div className="flex items-center justify-between">
                           <FormLabel className="text-sm font-medium">Password</FormLabel>
                           <Link
-                            href="/candidate/forgot-password"
+                            href="/portal/forgot-password"
                             className="text-xs text-orange-600 hover:text-orange-700 transition-colors"
                           >
                             Forgot password?
@@ -209,7 +209,7 @@ export function CandidateLoginForm() {
               <p className="mt-6 text-center text-sm text-muted-foreground">
                 Don&apos;t have an account?{' '}
                 <Link
-                  href="/candidate/register"
+                  href="/portal/register"
                   className="font-medium text-orange-600 hover:text-orange-700 transition-colors"
                 >
                   Create account

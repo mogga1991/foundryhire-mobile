@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ResendVerificationButton } from '@/components/candidate/resend-verification-button'
+import { ResendVerificationButton } from '@/components/portal/resend-verification-button'
 
 export const metadata: Metadata = {
   title: 'Verify Your Email - VerticalHire',
@@ -84,7 +84,7 @@ export default function CandidateVerifyEmailPage() {
                 asChild
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white"
               >
-                <Link href="/candidate/dashboard">
+                <Link href="/portal/dashboard">
                   Go to Dashboard
                 </Link>
               </Button>
@@ -94,7 +94,7 @@ export default function CandidateVerifyEmailPage() {
                 variant="outline"
                 className="w-full border-orange-200 hover:bg-orange-50"
               >
-                <Link href="/candidate/login">
+                <Link href="/portal/login">
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Back to Sign In
                 </Link>

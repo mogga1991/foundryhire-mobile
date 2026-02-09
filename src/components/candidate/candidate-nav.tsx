@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { LogOut, User, Settings, ChevronDown } from 'lucide-react'
+import { LogOut, User, Settings, ChevronDown, Bell } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -36,7 +36,7 @@ export function CandidateNav({ user }: CandidateNavProps) {
   async function handleLogout() {
     setIsLoggingOut(true)
     try {
-      const res = await fetch('/api/candidate/auth/logout', {
+      const res = await fetch('/api/portal/auth/logout', {
         method: 'POST',
       })
 
@@ -45,7 +45,7 @@ export function CandidateNav({ user }: CandidateNavProps) {
       }
 
       toast.success('Logged out successfully')
-      router.push('/candidate/login')
+      router.push('/portal/login')
       router.refresh()
     } catch (error) {
       console.error('Logout error:', error)
@@ -62,7 +62,7 @@ export function CandidateNav({ user }: CandidateNavProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <div className="flex items-center justify-between">
           {/* Logo and Title */}
-          <Link href="/candidate/dashboard" className="flex items-center gap-3">
+          <Link href="/portal/dashboard" className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center">
               <Image
                 src="/verticalhire.png"
@@ -111,13 +111,19 @@ export function CandidateNav({ user }: CandidateNavProps) {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/candidate/profile" className="cursor-pointer">
+                  <Link href="/portal/profile" className="cursor-pointer">
                     <User className="mr-2 h-4 w-4" />
                     <span>Profile</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/candidate/settings" className="cursor-pointer">
+                  <Link href="/portal/notifications" className="cursor-pointer">
+                    <Bell className="mr-2 h-4 w-4" />
+                    <span>Notifications</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/portal/settings" className="cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
                     <span>Settings</span>
                   </Link>

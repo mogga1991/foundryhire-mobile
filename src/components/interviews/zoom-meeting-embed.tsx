@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import ZoomMtgEmbedded from '@zoom/meetingsdk/embedded'
+
+// Type definition for Zoom SDK
+type ZoomMtgEmbedded = any
 
 interface ZoomMeetingEmbedProps {
   meetingNumber: string
@@ -36,13 +38,24 @@ export function ZoomMeetingEmbed({
   const clientRef = useRef<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Only render on client side
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   useEffect(() => {
+    if (!isMounted) return
+
     let mounted = true
 
     async function initZoom() {
       try {
         if (!containerRef.current) return
+
+        // Dynamically import Zoom SDK (client-side only)
+        const ZoomMtgEmbedded = (await import('@zoom/meetingsdk/embedded')).default
 
         // Initialize Zoom client
         const client = ZoomMtgEmbedded.createClient()
@@ -124,7 +137,21 @@ export function ZoomMeetingEmbed({
         }
       }
     }
-  }, [meetingNumber, userName, userEmail, password, role, onMeetingEnd, onMeetingError])
+  }, [isMounted, meetingNumber, userName, userEmail, password, role, onMeetingEnd, onMeetingError])
+
+  // Don't render on server side
+  if (!isMounted) {
+    return (
+      <div className="relative w-full h-full bg-gray-900 rounded-2xl overflow-hidden">
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
+          <div className="text-center text-white">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-sm text-gray-400">Loading...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (error) {
     return (

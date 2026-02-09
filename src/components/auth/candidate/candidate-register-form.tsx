@@ -74,7 +74,7 @@ export function CandidateRegisterForm() {
     setIsLoading(true)
 
     try {
-      const res = await fetch('/api/candidate/auth/register', {
+      const res = await fetch('/api/portal/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -107,7 +107,7 @@ export function CandidateRegisterForm() {
         description: 'Welcome to VerticalHire. Please check your email to verify your account.',
       })
 
-      router.push('/candidate/verify-email')
+      router.push('/portal/verify-email')
     } catch (err) {
       console.error('[Candidate Register Error]', err)
       toast.error('Registration failed', {
@@ -293,7 +293,7 @@ export function CandidateRegisterForm() {
               <p className="mt-6 text-center text-sm text-muted-foreground">
                 Already have an account?{' '}
                 <Link
-                  href="/candidate/login"
+                  href="/portal/login"
                   className="font-medium text-orange-600 hover:text-orange-700 transition-colors"
                 >
                   Sign in

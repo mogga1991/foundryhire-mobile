@@ -7,12 +7,11 @@ const publicRoutes = [
   '/privacy',
   '/terms',
   '/forgot-password',
-  '/portal',
-  '/candidate/login',
-  '/candidate/register',
-  '/candidate/forgot-password',
-  '/candidate/reset-password',
-  '/candidate/verify-email',
+  '/portal/login',
+  '/portal/register',
+  '/portal/forgot-password',
+  '/portal/reset-password',
+  '/portal/verify-email',
   '/api/webhooks',
   '/api/health',
   '/api/auth',
@@ -41,10 +40,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Candidate routes require candidate session
-  if (pathname.startsWith('/candidate')) {
+  // Portal routes require candidate session
+  if (pathname.startsWith('/portal/') || pathname === '/portal') {
     if (!candidateSessionToken) {
-      const loginUrl = new URL('/candidate/login', request.url)
+      const loginUrl = new URL('/portal/login', request.url)
       return NextResponse.redirect(loginUrl)
     }
     return NextResponse.next()
