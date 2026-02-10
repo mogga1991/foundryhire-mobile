@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -125,15 +124,6 @@ export function CandidateRegisterForm() {
         <div className="w-full max-w-md space-y-8">
           {/* Logo / Branding */}
           <div className="flex flex-col items-center gap-3">
-            <div className="flex h-14 w-14 items-center justify-center">
-              <Image
-                src="/verticalhire.png"
-                alt="VerticalHire"
-                width={56}
-                height={56}
-                className="object-contain"
-              />
-            </div>
             <div className="text-center">
               <h1 className="text-2xl font-bold tracking-tight text-foreground">
                 VerticalHire

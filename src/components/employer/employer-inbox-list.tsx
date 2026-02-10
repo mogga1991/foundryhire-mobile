@@ -83,7 +83,7 @@ export function EmployerInboxList() {
             When you reach out to candidates, you'll see them here.
           </p>
           <Button asChild className="bg-purple-600 hover:bg-purple-700">
-            <Link href="/find-candidates">
+            <Link href="/candidates">
               Find Candidates
             </Link>
           </Button>
@@ -222,7 +222,7 @@ export function EmployerInboxList() {
                           className="bg-purple-600 hover:bg-purple-700"
                           size="sm"
                         >
-                          <Link href={`/find-candidates/${reachOut.candidate.id}`}>
+                          <Link href={`/candidates/${reachOut.candidate.id}`}>
                             <User className="h-4 w-4 mr-1" />
                             View Profile
                           </Link>

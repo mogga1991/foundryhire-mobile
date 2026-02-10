@@ -88,7 +88,7 @@ export function CandidateProfileView({ candidate }: { candidate: Candidate }) {
       <div className="bg-gradient-to-r from-purple-900 via-slate-900 to-cyan-900 text-white py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link
-            href="/find-candidates"
+            href="/candidates"
             className="inline-flex items-center gap-2 text-white hover:text-gray-200 mb-4"
           >
             <ArrowLeft className="h-4 w-4" />

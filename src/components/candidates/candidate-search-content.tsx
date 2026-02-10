@@ -72,7 +72,7 @@ export function CandidateSearchContent() {
     if (locationFilter) params.set('location', locationFilter)
     if (experienceFilter && experienceFilter !== 'all') params.set('experience', experienceFilter)
 
-    router.push(`/find-candidates?${params.toString()}`)
+    router.push(`/candidates?${params.toString()}`)
   }
 
   return (
@@ -158,7 +158,7 @@ export function CandidateSearchContent() {
               setSearchQuery('')
               setLocationFilter('')
               setExperienceFilter('all')
-              router.push('/find-candidates')
+              router.push('/candidates')
             }}>
               Clear Filters
             </Button>
@@ -215,7 +215,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
               </div>
 
               <Button
-                onClick={() => window.location.href = `/find-candidates/${candidate.id}`}
+                onClick={() => window.location.href = `/candidates/${candidate.id}`}
                 variant="default"
                 className="bg-purple-600 hover:bg-purple-700"
               >
