@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { LoginForm } from '@/components/auth/login-form'
 import { MobileLoginForm } from '@/components/auth/mobile-login-form'
 
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <>
+    <Suspense fallback={null}>
       {/* Mobile View */}
       <div className="lg:hidden">
         <MobileLoginForm />
@@ -19,6 +20,6 @@ export default function LoginPage() {
       <div className="hidden lg:block">
         <LoginForm />
       </div>
-    </>
+    </Suspense>
   )
 }
