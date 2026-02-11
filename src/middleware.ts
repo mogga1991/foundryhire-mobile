@@ -30,6 +30,19 @@ function isPublicRoute(pathname: string): boolean {
   )
 }
 
+function hasEmployerSessionCookie(request: NextRequest): boolean {
+  const hasLegacySession = !!request.cookies.get('session_token')?.value
+
+  if (hasLegacySession) {
+    return true
+  }
+
+  // Supabase auth cookies use names like `sb-<project-ref>-auth-token`.
+  return request.cookies
+    .getAll()
+    .some((cookie) => cookie.name.startsWith('sb-') && cookie.name.includes('-auth-token'))
+}
+
 /**
  * Validate CSRF token at the middleware level (defense-in-depth)
  * Uses simple double-submit cookie pattern validation
@@ -89,7 +102,7 @@ function validateCsrfInMiddleware(
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const employerSessionToken = request.cookies.get('session_token')?.value
+  const hasEmployerSession = hasEmployerSessionCookie(request)
   const candidateSessionToken = request.cookies.get('candidate_session_token')?.value
 
   // CSRF Protection for API routes (defense-in-depth)
@@ -118,7 +131,7 @@ export function middleware(request: NextRequest) {
     }
   }
   // Employer routes require employer session
-  else if (!employerSessionToken) {
+  else if (!hasEmployerSession) {
     const loginUrl = new URL('/login', request.url)
     response = NextResponse.redirect(loginUrl)
   } else {

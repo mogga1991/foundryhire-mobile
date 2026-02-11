@@ -5,7 +5,8 @@ import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
-import { hashPassword, createSession } from '@/lib/auth'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { syncSupabaseUser } from '@/lib/auth'
 
 const logger = createLogger('api:auth:signup')
 
@@ -35,11 +36,13 @@ async function _POST(request: NextRequest) {
       )
     }
 
-    // Check if user already exists
+    const normalizedEmail = email.toLowerCase().trim()
+
+    // Check if user already exists in app database
     const [existing] = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.email, email.toLowerCase().trim()))
+      .where(eq(users.email, normalizedEmail))
       .limit(1)
 
     if (existing) {
@@ -49,25 +52,33 @@ async function _POST(request: NextRequest) {
       )
     }
 
-    // Hash password and create user
-    const passwordHash = await hashPassword(password)
+    const supabase = await createSupabaseServerClient()
+    const { data, error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+      options: {
+        data: {
+          full_name: fullName.trim(),
+        },
+      },
+    })
 
-    const [user] = await db
-      .insert(users)
-      .values({
-        email: email.toLowerCase().trim(),
-        name: fullName.trim(),
-        passwordHash,
-        emailVerified: new Date(), // Auto-verify for now
-      })
-      .returning({ id: users.id, email: users.email, name: users.name })
+    if (error || !data.user) {
+      return NextResponse.json(
+        { error: error?.message || 'Failed to create account' },
+        { status: 400 }
+      )
+    }
 
-    // Create session
-    await createSession(user.id)
+    const syncedUser = await syncSupabaseUser(data.user)
+    if (syncedUser.error) {
+      return NextResponse.json({ error: syncedUser.error }, { status: 409 })
+    }
 
     return NextResponse.json({
       success: true,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: syncedUser.user,
+      emailConfirmationRequired: !data.session,
     })
   } catch (error) {
     if (error instanceof SyntaxError) {

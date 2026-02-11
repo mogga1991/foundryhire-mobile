@@ -1,122 +1,149 @@
 import { cookies } from 'next/headers'
 import { db } from '@/lib/db'
-import { users, sessions } from '@/lib/db/schema'
-import { eq, and, gt } from 'drizzle-orm'
-import crypto from 'crypto'
-import { env } from '@/lib/env'
+import { users } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm'
+import { createLogger } from '@/lib/logger'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+import type { User as SupabaseUser } from '@supabase/supabase-js'
 
-// =============================================================================
-// Password Hashing (using Node.js crypto - no external deps)
-// =============================================================================
+const logger = createLogger('auth')
 
-const SALT_LENGTH = 16
-const KEY_LENGTH = 64
-const ITERATIONS = 100_000
-const DIGEST = 'sha512'
+const LEGACY_CONFLICT_ERROR =
+  'This account exists in a legacy auth format. Run a user migration to Supabase IDs before signing in.'
 
-export async function hashPassword(password: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const salt = crypto.randomBytes(SALT_LENGTH).toString('hex')
-    crypto.pbkdf2(password, salt, ITERATIONS, KEY_LENGTH, DIGEST, (err, derivedKey) => {
-      if (err) reject(err)
-      resolve(`${salt}:${derivedKey.toString('hex')}`)
-    })
-  })
+export function getLegacyAuthConflictErrorMessage(): string {
+  return LEGACY_CONFLICT_ERROR
 }
 
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const [salt, key] = hash.split(':')
-    if (!salt || !key) return resolve(false)
-    crypto.pbkdf2(password, salt, ITERATIONS, KEY_LENGTH, DIGEST, (err, derivedKey) => {
-      if (err) reject(err)
-      resolve(derivedKey.toString('hex') === key)
+export async function syncSupabaseUser(authUser: SupabaseUser): Promise<{
+  user: { id: string; email: string; name: string | null }
+  error?: undefined
+} | {
+  user?: undefined
+  error: string
+}> {
+  const email = authUser.email?.toLowerCase().trim()
+
+  if (!email) {
+    return { error: 'Authenticated user is missing an email address' }
+  }
+
+  const displayName =
+    (authUser.user_metadata?.full_name as string | undefined) ??
+    (authUser.user_metadata?.name as string | undefined) ??
+    email
+
+  const [existingByEmail] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1)
+
+  if (existingByEmail && existingByEmail.id !== authUser.id) {
+    return { error: LEGACY_CONFLICT_ERROR }
+  }
+
+  await db
+    .insert(users)
+    .values({
+      id: authUser.id,
+      email,
+      name: displayName,
+      emailVerified: new Date(),
     })
-  })
-}
+    .onConflictDoUpdate({
+      target: users.id,
+      set: {
+        email,
+        name: displayName,
+        emailVerified: new Date(),
+        updatedAt: new Date(),
+      },
+    })
 
-// =============================================================================
-// Session Management (database-backed, cookie-based)
-// =============================================================================
+  const [user] = await db
+    .select({ id: users.id, email: users.email, name: users.name })
+    .from(users)
+    .where(eq(users.id, authUser.id))
+    .limit(1)
 
-const SESSION_COOKIE_NAME = 'session_token'
-const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
-
-export async function createSession(userId: string): Promise<string> {
-  const token = crypto.randomBytes(32).toString('hex')
-  const expires = new Date(Date.now() + SESSION_DURATION_MS)
-
-  await db.insert(sessions).values({
-    sessionToken: token,
-    userId,
-    expires,
-  })
-
-  const cookieStore = await cookies()
-  cookieStore.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    expires,
-  })
-
-  return token
+  return {
+    user: {
+      id: authUser.id,
+      email: user?.email ?? email,
+      name: user?.name ?? displayName,
+    },
+  }
 }
 
 export async function getSession(): Promise<{
   user: { id: string; email: string; name: string | null; image: string | null }
 } | null> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
+  try {
+    const supabase = await createSupabaseServerClient()
+    const {
+      data: { user: authUser },
+      error,
+    } = await supabase.auth.getUser()
 
-  if (!token) return null
+    if (error || !authUser) {
+      return null
+    }
 
-  const [session] = await db
-    .select({
-      sessionId: sessions.id,
-      userId: sessions.userId,
-      expires: sessions.expires,
-      userName: users.name,
-      userEmail: users.email,
-      userImage: users.image,
-    })
-    .from(sessions)
-    .innerJoin(users, eq(sessions.userId, users.id))
-    .where(
-      and(
-        eq(sessions.sessionToken, token),
-        gt(sessions.expires, new Date())
-      )
-    )
-    .limit(1)
+    const [dbUser] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        image: users.image,
+      })
+      .from(users)
+      .where(eq(users.id, authUser.id))
+      .limit(1)
 
-  if (!session) {
-    // Cookie will expire naturally or be cleaned up on next login
+    const fallbackName = (authUser.user_metadata?.full_name as string | undefined) ?? null
+    const fallbackImage = (authUser.user_metadata?.avatar_url as string | undefined) ?? null
+    const email = dbUser?.email ?? authUser.email
+
+    if (!email) {
+      return null
+    }
+
+    return {
+      user: {
+        id: authUser.id,
+        email,
+        name: dbUser?.name ?? fallbackName,
+        image: dbUser?.image ?? fallbackImage,
+      },
+    }
+  } catch (error) {
+    logger.error({ error }, 'Failed to load employer session')
     return null
-  }
-
-  return {
-    user: {
-      id: session.userId,
-      email: session.userEmail,
-      name: session.userName,
-      image: session.userImage,
-    },
   }
 }
 
 export async function deleteSession(): Promise<void> {
   const cookieStore = await cookies()
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
+  cookieStore.delete('session_token')
 
-  if (token) {
-    await db.delete(sessions).where(eq(sessions.sessionToken, token))
-    cookieStore.delete(SESSION_COOKIE_NAME)
+  try {
+    const supabase = await createSupabaseServerClient()
+    await supabase.auth.signOut()
+  } catch (error) {
+    logger.error({ error }, 'Failed to sign out from Supabase')
   }
 }
 
 export async function getSessionToken(): Promise<string | undefined> {
-  const cookieStore = await cookies()
-  return cookieStore.get(SESSION_COOKIE_NAME)?.value
+  try {
+    const supabase = await createSupabaseServerClient()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    return session?.access_token
+  } catch {
+    return undefined
+  }
 }

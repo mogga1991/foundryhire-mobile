@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { users } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
-import { verifyPassword, createSession } from '@/lib/auth'
 import { rateLimit, RateLimitPresets, getEndpointIdentifier } from '@/lib/rate-limit'
 import { createLogger } from '@/lib/logger'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { syncSupabaseUser } from '@/lib/auth'
 
 const logger = createLogger('api:auth:login')
 
@@ -27,40 +25,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find user
-    const [user] = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        passwordHash: users.passwordHash,
-      })
-      .from(users)
-      .where(eq(users.email, email.toLowerCase().trim()))
-      .limit(1)
+    const normalizedEmail = email.toLowerCase().trim()
+    const supabase = await createSupabaseServerClient()
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    })
 
-    if (!user || !user.passwordHash) {
+    if (error || !data.user) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
       )
     }
 
-    // Verify password
-    const isValid = await verifyPassword(password, user.passwordHash)
-    if (!isValid) {
-      return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      )
+    const syncedUser = await syncSupabaseUser(data.user)
+    if (syncedUser.error) {
+      return NextResponse.json({ error: syncedUser.error }, { status: 409 })
     }
-
-    // Create session
-    await createSession(user.id)
 
     return NextResponse.json({
       success: true,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: syncedUser.user,
     })
   } catch (error) {
     if (error instanceof SyntaxError) {
