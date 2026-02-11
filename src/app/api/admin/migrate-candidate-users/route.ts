@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { sql } from 'drizzle-orm'
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('api:admin:migrate-candidate-users')
 
 // Admin migration endpoint to create candidate_users table
 // Should be called once to set up the database
@@ -8,20 +12,20 @@ export async function POST(req: NextRequest) {
   try {
     // Optional: Add authentication check here in production
     const authHeader = req.headers.get('authorization')
-    const expectedToken = process.env.ADMIN_MIGRATION_TOKEN || 'allow-migration'
+    const expectedToken = env.ADMIN_MIGRATION_TOKEN
 
-    if (authHeader !== `Bearer ${expectedToken}`) {
+    if (!expectedToken || authHeader !== `Bearer ${expectedToken}`) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
 
-    console.log('🚀 Starting candidate_users table migration...')
+    logger.info({ message: 'Starting candidate_users table migration' })
 
     // Drop existing table if exists
     await db.execute(sql`DROP TABLE IF EXISTS candidate_users CASCADE`)
-    console.log('✅ Dropped existing candidate_users table')
+    logger.info({ message: 'Dropped existing candidate_users table' })
 
     // Create candidate_users table with all required columns
     await db.execute(sql`
@@ -51,11 +55,11 @@ export async function POST(req: NextRequest) {
         updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
       );
     `)
-    console.log('✅ Created candidate_users table')
+    logger.info({ message: 'Created candidate_users table' })
 
     // Create index on email
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS candidate_users_email_idx ON candidate_users(email)`)
-    console.log('✅ Created unique index on email')
+    logger.info({ message: 'Created unique index on email' })
 
     return NextResponse.json({
       success: true,
@@ -63,7 +67,7 @@ export async function POST(req: NextRequest) {
     })
 
   } catch (error) {
-    console.error('❌ Migration failed:', error)
+    logger.error({ message: 'Migration failed', error })
     return NextResponse.json(
       {
         error: 'Migration failed',

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { emailAccounts, emailAccountSecrets } from '@/lib/db/schema'
 import { encrypt } from '@/lib/utils/encryption'
 import nodemailer from 'nodemailer'
 
-export async function POST(request: NextRequest) {
+const logger = createLogger('api:email:connect:smtp')
+
+async function _POST(request: NextRequest) {
   try {
     const { companyId } = await requireCompanyAccess()
     const body = await request.json()
@@ -72,10 +76,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: account })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    console.error('[SMTP Connect] Error:', error)
+    logger.error({ message: 'SMTP connection error', error })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

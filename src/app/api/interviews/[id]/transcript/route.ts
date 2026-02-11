@@ -1,22 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { interviews } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('api:interview-transcript')
+
+const transcriptRequestSchema = z.object({
+  transcript: z.string().min(1),
+})
 
 // POST /api/interviews/[id]/transcript - Upload or update interview transcript
-export async function POST(
+async function _POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { companyId } = await requireCompanyAccess()
     const { id: interviewId } = await params
-    const { transcript } = await request.json()
-
-    if (!transcript) {
-      return NextResponse.json({ error: 'transcript is required' }, { status: 400 })
-    }
+    const { transcript } = transcriptRequestSchema.parse(await request.json())
 
     // Verify interview belongs to company
     const [interview] = await db
@@ -40,7 +45,16 @@ export async function POST(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error updating transcript:', error)
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.issues },
+        { status: 400 }
+      )
+    }
+    logger.error({ message: 'Error updating transcript', error })
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -50,6 +64,8 @@ export async function POST(
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })
 
 // GET /api/interviews/[id]/transcript - Get interview transcript
 export async function GET(
@@ -75,7 +91,10 @@ export async function GET(
 
     return NextResponse.json({ transcript: interview.transcript })
   } catch (error) {
-    console.error('Error fetching transcript:', error)
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    logger.error({ message: 'Error fetching transcript', error })
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

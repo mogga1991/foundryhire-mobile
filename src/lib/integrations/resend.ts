@@ -1,12 +1,15 @@
 import { Resend } from 'resend'
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
 
-const resendApiKey = process.env.RESEND_API_KEY
+const logger = createLogger('integration:resend')
+const resendApiKey = env.RESEND_API_KEY
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null
 
 // Format: "Name <email@domain.com>"
-const fromName = process.env.EMAIL_FROM_NAME ?? 'VerticalHire'
-const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'noreply@verticalhire.com'
+const fromName = env.EMAIL_FROM_NAME ?? 'VerticalHire'
+const fromEmail = env.RESEND_FROM_EMAIL ?? 'noreply@verticalhire.com'
 const DEFAULT_FROM = `${fromName} <${fromEmail}>`
 
 interface SendEmailParams {
@@ -33,11 +36,13 @@ export async function sendEmail({
   from,
 }: SendEmailParams): Promise<SendEmailResult> {
   if (!resend) {
-    console.log('[MVP Email] Sending email (mock):')
-    console.log(`  To: ${to}`)
-    console.log(`  From: ${from ?? DEFAULT_FROM}`)
-    console.log(`  Subject: ${subject}`)
-    console.log(`  Body length: ${body.length} chars`)
+    logger.info({
+      message: 'Sending email (mock)',
+      to,
+      from: from ?? DEFAULT_FROM,
+      subject,
+      bodyLength: body.length
+    })
     return {
       success: true,
       id: `mock_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -54,14 +59,14 @@ export async function sendEmail({
     })
 
     if (error) {
-      console.error('[Resend] Error sending email:', error)
+      logger.error({ message: 'Error sending email', error })
       return { success: false, id: null, error: error.message }
     }
 
     return { success: true, id: data?.id ?? null, error: null }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error sending email'
-    console.error('[Resend] Exception:', message)
+    logger.error({ message: 'Exception', error: err })
     return { success: false, id: null, error: message }
   }
 }
@@ -88,9 +93,9 @@ export async function sendBulkEmails(
   emails: BulkEmailItem[]
 ): Promise<BulkSendResult> {
   if (!resend) {
-    console.log(`[MVP Email] Sending ${emails.length} emails (mock):`)
+    logger.info({ message: 'Sending bulk emails (mock)', count: emails.length })
     const results: SendEmailResult[] = emails.map((email, index) => {
-      console.log(`  [${index + 1}] To: ${email.to} | Subject: ${email.subject}`)
+      logger.info({ message: `Email ${index + 1}`, to: email.to, subject: email.subject })
       return {
         success: true,
         id: `mock_bulk_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 9)}`,

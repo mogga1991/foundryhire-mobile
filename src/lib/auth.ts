@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { users, sessions } from '@/lib/db/schema'
 import { eq, and, gt } from 'drizzle-orm'
 import crypto from 'crypto'
+import { env } from '@/lib/env'
 
 // =============================================================================
 // Password Hashing (using Node.js crypto - no external deps)
@@ -54,7 +55,7 @@ export async function createSession(userId: string): Promise<string> {
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
     expires,

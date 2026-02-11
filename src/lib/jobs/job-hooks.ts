@@ -6,6 +6,9 @@
  */
 
 import { triggerLeadGenerationForJob } from './auto-lead-generation'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('lib:job-hooks')
 
 /**
  * Hook to run after a job is created
@@ -27,23 +30,20 @@ export async function onJobCreated(
 ) {
   const { autoGenerateLeads = false, maxLeads = 20 } = options || {}
 
-  console.log('[Job Hooks] Job created:', jobId)
+  logger.info({ message: 'Job created', jobId })
 
   // Automatically generate leads if enabled
   if (autoGenerateLeads) {
-    console.log('[Job Hooks] Auto-generating leads...')
+    logger.info({ message: 'Auto-generating leads' })
 
     try {
       const stats = await triggerLeadGenerationForJob(jobId, companyId, maxLeads)
 
-      console.log('[Job Hooks] Lead generation complete:', {
-        leadsGenerated: stats.totalLeadsGenerated,
-        saved: stats.savedToDatabase,
-      })
+      logger.info({ message: 'Lead generation complete', leadsGenerated: stats.totalLeadsGenerated, saved: stats.savedToDatabase })
 
       return { leadGenerationStats: stats }
     } catch (error) {
-      console.error('[Job Hooks] Lead generation failed:', error)
+      logger.error({ message: 'Lead generation failed', error })
       // Don't fail the job creation if lead generation fails
       return { leadGenerationError: error instanceof Error ? error.message : 'Unknown error' }
     }
@@ -69,23 +69,20 @@ export async function onJobPublished(
 ) {
   const { generateLeadsOnPublish = true, maxLeads = 30 } = options || {}
 
-  console.log('[Job Hooks] Job published:', jobId)
+  logger.info({ message: 'Job published', jobId })
 
   // Generate leads when job is published (if not already done)
   if (generateLeadsOnPublish) {
-    console.log('[Job Hooks] Generating leads for published job...')
+    logger.info({ message: 'Generating leads for published job' })
 
     try {
       const stats = await triggerLeadGenerationForJob(jobId, companyId, maxLeads)
 
-      console.log('[Job Hooks] Lead generation complete:', {
-        leadsGenerated: stats.totalLeadsGenerated,
-        saved: stats.savedToDatabase,
-      })
+      logger.info({ message: 'Lead generation complete', leadsGenerated: stats.totalLeadsGenerated, saved: stats.savedToDatabase })
 
       return { leadGenerationStats: stats }
     } catch (error) {
-      console.error('[Job Hooks] Lead generation failed:', error)
+      logger.error({ message: 'Lead generation failed', error })
       return { leadGenerationError: error instanceof Error ? error.message : 'Unknown error' }
     }
   }

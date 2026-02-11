@@ -4,6 +4,7 @@ import { candidateReachOuts } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { getCandidateSession } from '@/lib/auth/candidate-session'
 import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 const logger = createLogger('candidate-reach-out-read')
 
@@ -11,7 +12,7 @@ interface Params {
   id: string
 }
 
-export async function POST(
+async function _POST(
   req: NextRequest,
   context: { params: Promise<Params> }
 ) {
@@ -65,3 +66,5 @@ export async function POST(
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

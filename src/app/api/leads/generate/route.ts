@@ -27,8 +27,12 @@ import { eq } from 'drizzle-orm'
 import { generateFreeLeads } from '@/lib/integrations/free-tier-orchestrator'
 import { deduplicateBatch, type CandidateInput } from '@/lib/services/deduplication'
 import { queueEnrichmentBatch } from '@/lib/services/enrichment-queue'
+import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
-export async function POST(request: NextRequest) {
+const logger = createLogger('api:leads:generate')
+
+async function _POST(request: NextRequest) {
   try {
     // Authenticate user
     const session = await getSession()
@@ -67,7 +71,8 @@ export async function POST(request: NextRequest) {
       (s: string) => ['linkedin', 'indeed'].includes(s)
     ) as Array<'linkedin' | 'indeed'> | undefined
 
-    console.log('[Lead Generation] Starting:', {
+    logger.info({
+      message: 'Lead generation starting',
       jobTitle,
       location,
       maxLeads: safeMaxLeads,
@@ -84,7 +89,8 @@ export async function POST(request: NextRequest) {
       validSources
     )
 
-    console.log('[Lead Generation] Generated leads:', {
+    logger.info({
+      message: 'Lead generation completed',
       totalLeads: leads.length,
       emailsFound: stats.emailsFound,
       phonesFound: stats.phonesFound,
@@ -124,7 +130,10 @@ export async function POST(request: NextRequest) {
       'merge_best'
     )
 
-    console.log('[Lead Generation] Dedup results:', dedupStats)
+    logger.info({
+      message: 'Lead deduplication completed',
+      stats: dedupStats,
+    })
 
     // Queue enrichment for newly inserted candidates
     const newCandidateIds = dedupResults
@@ -134,9 +143,16 @@ export async function POST(request: NextRequest) {
     if (newCandidateIds.length > 0) {
       try {
         await queueEnrichmentBatch(newCandidateIds, companyUser.companyId)
-        console.log(`[Lead Generation] Queued enrichment for ${newCandidateIds.length} candidates`)
+        logger.info({
+          message: 'Queued enrichment for candidates',
+          candidateCount: newCandidateIds.length,
+        })
       } catch (err) {
-        console.error('[Lead Generation] Failed to queue enrichment:', err)
+        logger.error({
+          message: 'Failed to queue enrichment',
+          error: err,
+          candidateCount: newCandidateIds.length,
+        })
       }
     }
 
@@ -172,7 +188,13 @@ export async function POST(request: NextRequest) {
       })),
     })
   } catch (error) {
-    console.error('[Lead Generation] API Error:', error)
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    logger.error({
+      message: 'Lead generation API error',
+      error,
+    })
     return NextResponse.json(
       {
         error: 'Lead generation failed',
@@ -182,3 +204,5 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

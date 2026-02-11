@@ -9,25 +9,38 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAndScheduleFollowUps } from '@/lib/services/follow-up-scheduler'
+import { safeCompare } from '@/lib/security/timing-safe'
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('api:email:follow-ups:process')
 
 export async function POST(request: NextRequest) {
   try {
     const cronSecret = request.headers.get('x-cron-secret')
+    const expectedSecret = env.CRON_SECRET
 
-    if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+    if (!cronSecret || !expectedSecret || !safeCompare(cronSecret, expectedSecret)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('[Follow-Up Cron] Checking for follow-ups to schedule...')
+    logger.info({ message: 'Checking for follow-ups to schedule' })
     const result = await checkAndScheduleFollowUps()
-    console.log(`[Follow-Up Cron] Checked ${result.campaignsChecked} campaigns, scheduled ${result.followUpsScheduled} follow-ups`)
+    logger.info({
+      message: 'Follow-up scheduling completed',
+      campaignsChecked: result.campaignsChecked,
+      followUpsScheduled: result.followUpsScheduled,
+    })
 
     return NextResponse.json({
       success: true,
       ...result,
     })
   } catch (error) {
-    console.error('[Follow-Up Cron] Error:', error)
+    logger.error({
+      message: 'Follow-up processing failed',
+      error,
+    })
     return NextResponse.json(
       {
         error: 'Follow-up processing failed',

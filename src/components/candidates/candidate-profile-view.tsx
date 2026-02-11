@@ -73,7 +73,9 @@ export function CandidateProfileView({ candidate }: { candidate: Candidate }) {
       setMessage('')
       setShowReachOutDialog(false)
     } catch (error) {
-      console.error('Reach out error:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Reach out error:', error)
+      }
       toast.error('Failed to send message', {
         description: error instanceof Error ? error.message : 'Please try again',
       })

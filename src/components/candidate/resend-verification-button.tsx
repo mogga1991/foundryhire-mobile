@@ -9,13 +9,36 @@ export function ResendVerificationButton() {
   async function handleResend() {
     setIsResending(true)
     try {
-      // TODO: Implement resend verification email API endpoint
-      toast.info('Coming soon', {
-        description: 'Resend verification email functionality will be available soon!',
+      const urlParams = new URLSearchParams(window.location.search)
+      const email = urlParams.get('email')
+
+      if (!email) {
+        toast.error('Email not found', {
+          description: 'Please try logging in again.',
+        })
+        return
+      }
+
+      const response = await fetch('/api/candidate/auth/resend-verification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to resend verification email')
+      }
+
+      toast.success('Verification email sent!', {
+        description: 'Please check your inbox and spam folder.',
       })
     } catch (error) {
       toast.error('Failed to resend', {
-        description: 'Please try again later.',
+        description: error instanceof Error ? error.message : 'Please try again later.',
       })
     } finally {
       setIsResending(false)

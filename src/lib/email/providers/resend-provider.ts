@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { env } from '@/lib/env'
 import type { EmailProvider, EmailMessage, EmailSendResult } from '../types'
 
 export class ResendProvider implements EmailProvider {
@@ -10,7 +11,7 @@ export class ResendProvider implements EmailProvider {
   private client: Resend
 
   constructor(apiKey?: string) {
-    const key = apiKey || process.env.RESEND_API_KEY
+    const key = apiKey || env.RESEND_API_KEY
     if (!key) throw new Error('Resend API key required')
     this.client = new Resend(key)
   }

@@ -16,6 +16,7 @@
 
 import crypto from 'crypto'
 import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
 
 const logger = createLogger('encryption')
 
@@ -36,10 +37,10 @@ const KEY_LENGTH = 32
  * @throws {Error} If key is missing or invalid
  */
 function getKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY
+  const key = env.ENCRYPTION_KEY
 
   if (!key) {
-    logger.error('ENCRYPTION_KEY environment variable is not set')
+    logger.error({ message: 'ENCRYPTION_KEY environment variable is not set' })
     throw new Error('Encryption configuration error')
   }
 
@@ -47,16 +48,17 @@ function getKey(): Buffer {
   try {
     keyBuffer = Buffer.from(key, 'hex')
   } catch (error) {
-    logger.error({ error }, 'Invalid ENCRYPTION_KEY format')
+    logger.error({ message: 'Invalid ENCRYPTION_KEY format', error })
     throw new Error('Encryption configuration error')
   }
 
   // Validate key length
   if (keyBuffer.length !== KEY_LENGTH) {
-    logger.error(
-      { actual: keyBuffer.length, expected: KEY_LENGTH },
-      'Invalid ENCRYPTION_KEY length'
-    )
+    logger.error({
+      message: 'Invalid ENCRYPTION_KEY length',
+      actual: keyBuffer.length,
+      expected: KEY_LENGTH,
+    })
     throw new Error('Encryption configuration error')
   }
 
@@ -97,7 +99,7 @@ export function encrypt(plaintext: string): string {
     // Return formatted encrypted string: iv:authTag:ciphertext
     return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`
   } catch (error) {
-    logger.error({ error }, 'Encryption failed')
+    logger.error({ message: 'Encryption failed', error })
     throw new Error('Failed to encrypt data')
   }
 }
@@ -157,7 +159,7 @@ export function decrypt(encryptedString: string): string {
     return decrypted.toString('utf8')
   } catch (error) {
     // Log the error but don't expose details to caller
-    logger.error({ error }, 'Decryption failed')
+    logger.error({ message: 'Decryption failed', error })
     throw new Error('Failed to decrypt data')
   }
 }

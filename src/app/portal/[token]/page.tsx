@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import {
   Calendar,
@@ -19,7 +19,13 @@ import {
   Target,
   Users,
   Phone,
+  Camera,
+  Mic,
+  XCircle,
+  MessageSquare,
 } from 'lucide-react'
+import { ZoomMeetingEmbed } from '@/components/interviews/zoom-meeting-embed'
+import { PostInterviewFeedback } from '@/components/portal/post-interview-feedback'
 
 interface TimeSlot {
   id: string
@@ -45,6 +51,8 @@ interface PortalData {
     phoneNumber: string | null
     status: string
     zoomJoinUrl: string | null
+    zoomMeetingId: string | null
+    passcode: string | null
     questions: Array<{ id: string; question: string; completed: boolean }>
   }
   timeSlots?: TimeSlot[]
@@ -75,6 +83,17 @@ export default function CandidatePortalPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'prepare' | 'tips'>('overview')
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null)
   const [isConfirming, setIsConfirming] = useState(false)
+
+  // Device check states
+  const [cameraPermission, setCameraPermission] = useState<'pending' | 'granted' | 'denied'>('pending')
+  const [micPermission, setMicPermission] = useState<'pending' | 'granted' | 'denied'>('pending')
+  const [showDevicePreview, setShowDevicePreview] = useState(false)
+  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null)
+
+  // Interview states
+  const [showZoomEmbed, setShowZoomEmbed] = useState(false)
+  const [meetingEnded, setMeetingEnded] = useState(false)
+  const [candidateNotes, setCandidateNotes] = useState('')
 
   useEffect(() => {
     async function fetchPortalData() {
@@ -130,6 +149,56 @@ export default function CandidatePortalPage() {
     }
   }
 
+  // Device permission check function
+  const checkDevicePermissions = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      setCameraPermission('granted')
+      setMicPermission('granted')
+      // Stop the stream immediately after checking
+      stream.getTracks().forEach(track => track.stop())
+    } catch (err) {
+      console.error('Device permission error:', err)
+      // Try to determine which permission failed
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        setCameraPermission('denied')
+        setMicPermission('denied')
+      }
+    }
+  }, [])
+
+  // Device preview function
+  const startDevicePreview = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      setPreviewStream(stream)
+      setShowDevicePreview(true)
+      setCameraPermission('granted')
+      setMicPermission('granted')
+    } catch (err) {
+      console.error('Failed to start device preview:', err)
+      setCameraPermission('denied')
+      setMicPermission('denied')
+    }
+  }, [])
+
+  const stopDevicePreview = useCallback(() => {
+    if (previewStream) {
+      previewStream.getTracks().forEach(track => track.stop())
+      setPreviewStream(null)
+    }
+    setShowDevicePreview(false)
+  }, [previewStream])
+
+  // Cleanup preview stream on unmount
+  useEffect(() => {
+    return () => {
+      if (previewStream) {
+        previewStream.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [previewStream])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-white flex items-center justify-center">
@@ -165,6 +234,15 @@ export default function CandidatePortalPage() {
   const isPast = scheduledDate && scheduledDate < now
   const timeUntil = isUpcoming && scheduledDate ? getTimeUntil(scheduledDate) : null
 
+  // Calculate time until interview in milliseconds
+  const msUntilInterview = scheduledDate ? scheduledDate.getTime() - now.getTime() : null
+  // Join button becomes active 5 minutes before scheduled time
+  const canJoinMeeting = msUntilInterview !== null && msUntilInterview <= 5 * 60 * 1000 && msUntilInterview > 0
+  const isInterviewTime = canJoinMeeting || (interview.status === 'in_progress')
+
+  // Determine interviewer name
+  const interviewerName = 'the hiring team'
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-blue-50">
       {/* Header */}
@@ -193,7 +271,7 @@ export default function CandidatePortalPage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-5xl mx-auto px-4 py-8" role="main">
         {/* Time Slot Selection (if not scheduled) */}
         {interview.status === 'pending' && data.timeSlots && data.timeSlots.length > 0 && (
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-8">
@@ -311,8 +389,197 @@ export default function CandidatePortalPage() {
           </div>
         )}
 
+        {/* Pre-Interview Device Check - Show for video interviews before join time */}
+        {interview.interviewType === 'video' && isUpcoming && !isInterviewTime && interview.status === 'scheduled' && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-8">
+            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Video className="h-6 w-6 text-orange-500" />
+              Pre-Interview Setup
+            </h2>
+            <p className="text-gray-600 mb-6">
+              Your interview with {interviewerName} starts in {timeUntil}. Let's make sure your audio and video are working properly.
+            </p>
+
+            {/* Device Check Status */}
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <Camera className="h-5 w-5 text-gray-600" />
+                  <span className="font-medium text-gray-900">Camera</span>
+                </div>
+                {cameraPermission === 'pending' && (
+                  <span className="text-sm text-gray-500">Not checked</span>
+                )}
+                {cameraPermission === 'granted' && (
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle2 className="h-5 w-5" />
+                    <span className="text-sm font-medium">Ready</span>
+                  </div>
+                )}
+                {cameraPermission === 'denied' && (
+                  <div className="flex items-center gap-2 text-red-600">
+                    <XCircle className="h-5 w-5" />
+                    <span className="text-sm font-medium">Access denied</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <Mic className="h-5 w-5 text-gray-600" />
+                  <span className="font-medium text-gray-900">Microphone</span>
+                </div>
+                {micPermission === 'pending' && (
+                  <span className="text-sm text-gray-500">Not checked</span>
+                )}
+                {micPermission === 'granted' && (
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle2 className="h-5 w-5" />
+                    <span className="text-sm font-medium">Ready</span>
+                  </div>
+                )}
+                {micPermission === 'denied' && (
+                  <div className="flex items-center gap-2 text-red-600">
+                    <XCircle className="h-5 w-5" />
+                    <span className="text-sm font-medium">Access denied</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={checkDevicePermissions}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition"
+              >
+                <CheckCircle2 className="h-5 w-5" />
+                Check Permissions
+              </button>
+              <button
+                onClick={startDevicePreview}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold rounded-xl transition"
+              >
+                <Video className="h-5 w-5" />
+                Test Audio/Video
+              </button>
+            </div>
+
+            {/* Interview Tips */}
+            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+              <h3 className="font-semibold text-blue-900 mb-2">Tips for a great interview:</h3>
+              <ul className="space-y-1 text-sm text-blue-800">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                  Find a quiet, well-lit space with a neutral background
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                  Close unnecessary applications to ensure a stable connection
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                  Have a copy of your resume and notes handy
+                </li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {/* Zoom Meeting Embed - Show when it's time to join */}
+        {interview.interviewType === 'video' && isInterviewTime && interview.zoomMeetingId && !meetingEnded && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-8">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Video className="h-6 w-6 text-orange-500" />
+                {showZoomEmbed ? 'Live Interview' : 'Ready to Join'}
+              </h2>
+              {showZoomEmbed && (
+                <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 rounded-full text-sm font-medium">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                  Live
+                </span>
+              )}
+            </div>
+
+            {!showZoomEmbed ? (
+              <div className="text-center py-8">
+                <div className="mb-4">
+                  <div className="h-16 w-16 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
+                    <Video className="h-8 w-8 text-orange-600" />
+                  </div>
+                  <p className="text-gray-600 mb-6">
+                    Your interview is ready to start. Click the button below to join the meeting.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowZoomEmbed(true)}
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition text-lg"
+                >
+                  <Video className="h-6 w-6" />
+                  Join Meeting
+                </button>
+              </div>
+            ) : (
+              <div className="w-full" style={{ height: '600px' }}>
+                <ZoomMeetingEmbed
+                  meetingNumber={interview.zoomMeetingId}
+                  userName={`${candidate.firstName} ${candidate.lastName}`}
+                  userEmail={interview.candidateEmail || ''}
+                  password={interview.passcode || ''}
+                  role={0}
+                  portalToken={token}
+                  onMeetingEnd={() => setMeetingEnded(true)}
+                  onMeetingError={(error) => console.error('Meeting error:', error)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Post-Interview Section */}
+        {(meetingEnded || (isPast && interview.status === 'completed')) && (
+          <>
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-8">
+              <div className="text-center mb-6">
+                <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 className="h-8 w-8 text-green-600" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Thank You!</h2>
+                <p className="text-gray-600">
+                  Your interview has been completed. {interviewerName} will be reviewing the recording and will be in touch soon.
+                </p>
+              </div>
+
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <h3 className="font-semibold text-blue-900 mb-2">What's next?</h3>
+                <ul className="space-y-2 text-sm text-blue-800">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                    The hiring team will review your interview
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                    You'll receive an update within the next few business days
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                    Feel free to send a follow-up thank you email
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Candidate Feedback Form */}
+            <PostInterviewFeedback token={token} />
+          </>
+        )}
+
         {/* Tab Navigation */}
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-8">
+        <nav className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-8" role="navigation" aria-label="Interview information sections">
           {[
             { key: 'overview' as const, label: 'Overview', icon: FileText },
             { key: 'prepare' as const, label: 'Prepare', icon: BookOpen },
@@ -331,17 +598,17 @@ export default function CandidatePortalPage() {
               {label}
             </button>
           ))}
-        </div>
+        </nav>
 
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="grid gap-6 md:grid-cols-2">
             {/* Interview Details Card */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+            <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6" aria-labelledby="interview-details-heading">
+              <h2 id="interview-details-heading" className="font-bold text-lg mb-4 flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-orange-500" />
                 Interview Details
-              </h3>
+              </h2>
               <div className="space-y-4">
                 {scheduledDate && (
                   <>
@@ -388,14 +655,14 @@ export default function CandidatePortalPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* Company & Role Card */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+            <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6" aria-labelledby="role-details-heading">
+              <h2 id="role-details-heading" className="font-bold text-lg mb-4 flex items-center gap-2">
                 <Building2 className="h-5 w-5 text-orange-500" />
                 About the Role
-              </h3>
+              </h2>
               <div className="space-y-4">
                 <div>
                   <p className="font-medium text-lg">{job?.title || 'Interview'}</p>
@@ -425,7 +692,7 @@ export default function CandidatePortalPage() {
                   </a>
                 )}
               </div>
-            </div>
+            </section>
 
             {/* Job Description (full width) */}
             {job?.description && (
@@ -575,9 +842,71 @@ export default function CandidatePortalPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 mt-16 py-8 text-center text-sm text-gray-400">
+      <footer className="border-t border-gray-200 mt-16 py-8 text-center text-sm text-gray-400" role="contentinfo">
         Powered by VerticalHire
       </footer>
+
+      {/* Device Preview Modal */}
+      {showDevicePreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-gray-900">Audio/Video Test</h3>
+                <button
+                  onClick={stopDevicePreview}
+                  className="text-gray-400 hover:text-gray-600 transition"
+                >
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="bg-gray-900 rounded-xl overflow-hidden mb-4" style={{ aspectRatio: '16/9' }}>
+                {previewStream ? (
+                  <video
+                    ref={(video) => {
+                      if (video && previewStream) {
+                        video.srcObject = previewStream
+                        video.play()
+                      }
+                    }}
+                    autoPlay
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                )}
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                  <div className="text-sm">
+                    <p className="font-medium text-green-900">Camera is working</p>
+                    <p className="text-green-700">You should see yourself in the preview above</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                  <div className="text-sm">
+                    <p className="font-medium text-green-900">Microphone is working</p>
+                    <p className="text-green-700">Speak to test - look for audio indicators during the meeting</p>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={stopDevicePreview}
+                className="mt-6 w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

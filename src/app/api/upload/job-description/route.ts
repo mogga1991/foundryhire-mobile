@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 import { requireAuth } from '@/lib/auth-helpers'
 import { writeFile, mkdir, readFile } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import mammoth from 'mammoth'
 
-export async function POST(request: NextRequest) {
+const logger = createLogger('api:upload:job-description')
+
+async function _POST(request: NextRequest) {
   try {
     await requireAuth()
 
@@ -59,7 +63,7 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
     } catch (err) {
-      console.error('Failed to extract text from DOCX:', err)
+      logger.error({ message: 'Failed to extract text from DOCX', error: err })
       return NextResponse.json({
         error: 'Failed to extract text from document. Please try another file.',
         success: false,
@@ -75,8 +79,10 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    console.error('Job description upload error:', error)
+    logger.error({ message: 'Job description upload error', error })
     const message = error instanceof Error ? error.message : 'Failed to upload job description'
     return NextResponse.json({ error: message, success: false }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

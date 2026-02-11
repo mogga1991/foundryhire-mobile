@@ -1,3 +1,8 @@
+import { env } from '@/lib/env'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('email:onboarding-complete')
+
 interface OnboardingCompleteParams {
   candidateEmail: string
   candidateName: string
@@ -133,19 +138,21 @@ The entire ${companyName} team is looking forward to working with you.
 This notification was sent via VerticalHire onboarding system. Welcome to the team!`
 
   // Use Resend if available, otherwise log
-  if (process.env.RESEND_API_KEY) {
+  if (env.RESEND_API_KEY) {
     const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
+    const resend = new Resend(env.RESEND_API_KEY)
 
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'onboarding@verticalhire.com',
+      from: env.RESEND_FROM_EMAIL || 'onboarding@verticalhire.com',
       to: candidateEmail,
       subject,
       html: htmlBody,
       text: textBody,
     })
   } else {
-    console.log(`[Onboarding Complete] Would send to ${candidateEmail}:`, {
+    logger.info({
+      message: 'Would send onboarding complete notification (no RESEND_API_KEY)',
+      candidateEmail,
       subject,
       jobTitle,
       companyName,

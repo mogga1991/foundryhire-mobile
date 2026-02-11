@@ -4,6 +4,8 @@ import { getCandidateUser } from '@/lib/auth/get-candidate-user'
 import { CandidateNav } from '@/components/candidate/candidate-nav'
 import { CandidateNotificationsList } from '@/components/candidate/notifications/candidate-notifications-list'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Notifications - VerticalHire Candidate',
   description: 'View messages and opportunities from employers',

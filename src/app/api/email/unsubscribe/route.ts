@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { emailSuppressions, campaignSends, candidates } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
+import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+
+const logger = createLogger('api:email:unsubscribe')
 
 async function addSuppression(companyId: string, email: string, source: string) {
   try {
@@ -15,7 +19,7 @@ async function addSuppression(companyId: string, email: string, source: string) 
       })
       .onConflictDoNothing()
   } catch (error) {
-    console.error('[Unsubscribe] Error adding suppression:', error)
+    logger.error({ message: 'Error adding suppression', error })
   }
 }
 
@@ -76,7 +80,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST: Handle List-Unsubscribe-Post one-click unsubscribe
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   const sid = request.nextUrl.searchParams.get('sid')
   const cid = request.nextUrl.searchParams.get('cid')
 
@@ -106,3 +110,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ success: true })
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

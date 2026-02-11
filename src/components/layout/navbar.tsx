@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Menu, Flame, LogOut, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { NotificationBell } from '@/components/notifications/notification-bell'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,6 +81,9 @@ export function Navbar({ user, companyName }: NavbarProps) {
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Notifications */}
+      <NotificationBell />
 
       {/* User dropdown */}
       <DropdownMenu>

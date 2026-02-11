@@ -13,7 +13,11 @@
  * - Tracking job changes
  */
 
-const LUSHA_API_KEY = process.env.LUSHA_API_KEY || ''
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('integration:lusha')
+const LUSHA_API_KEY = env.LUSHA_API_KEY || ''
 const LUSHA_BASE_URL = 'https://api.lusha.com'
 
 // =============================================================================
@@ -92,7 +96,7 @@ export async function enrichPerson(
   input: LushaPersonInput
 ): Promise<LushaPerson | null> {
   if (!LUSHA_API_KEY) {
-    console.warn('[Lusha] API key not configured')
+    logger.warn({ message: 'API key not configured' })
     return null
   }
 
@@ -113,7 +117,7 @@ export async function enrichPerson(
 
     return await response.json()
   } catch (error) {
-    console.error('[Lusha] Person enrichment error:', error)
+    logger.error({ message: 'Person enrichment error', error })
     return null
   }
 }
@@ -126,7 +130,7 @@ export async function enrichPeopleBulk(
   inputs: LushaPersonInput[]
 ): Promise<Array<LushaPerson | null>> {
   if (!LUSHA_API_KEY) {
-    console.warn('[Lusha] API key not configured')
+    logger.warn({ message: 'API key not configured' })
     return []
   }
 
@@ -149,7 +153,7 @@ export async function enrichPeopleBulk(
     const data = await response.json()
     return data.records || []
   } catch (error) {
-    console.error('[Lusha] Bulk enrichment error:', error)
+    logger.error({ message: 'Bulk enrichment error', error })
     return []
   }
 }
@@ -230,7 +234,7 @@ export async function enrichCompany(
   domain: string
 ): Promise<LushaCompany | null> {
   if (!LUSHA_API_KEY) {
-    console.warn('[Lusha] API key not configured')
+    logger.warn({ message: 'API key not configured' })
     return null
   }
 
@@ -251,7 +255,7 @@ export async function enrichCompany(
 
     return await response.json()
   } catch (error) {
-    console.error('[Lusha] Company enrichment error:', error)
+    logger.error({ message: 'Company enrichment error', error })
     return null
   }
 }
@@ -310,7 +314,7 @@ export async function searchPeople(params: {
   limit?: number
 }): Promise<LushaPerson[]> {
   if (!LUSHA_API_KEY) {
-    console.warn('[Lusha] API key not configured')
+    logger.warn({ message: 'API key not configured' })
     return []
   }
 
@@ -334,7 +338,7 @@ export async function searchPeople(params: {
     const data = await response.json()
     return data.results || []
   } catch (error) {
-    console.error('[Lusha] Search error:', error)
+    logger.error({ message: 'Search error', error })
     return []
   }
 }
@@ -371,7 +375,7 @@ export async function getRecentJobChanges(params: {
   limit?: number
 }): Promise<LushaPerson[]> {
   if (!LUSHA_API_KEY) {
-    console.warn('[Lusha] API key not configured')
+    logger.warn({ message: 'API key not configured' })
     return []
   }
 
@@ -396,7 +400,7 @@ export async function getRecentJobChanges(params: {
     const data = await response.json()
     return data.results || []
   } catch (error) {
-    console.error('[Lusha] Job changes error:', error)
+    logger.error({ message: 'Job changes error', error })
     return []
   }
 }

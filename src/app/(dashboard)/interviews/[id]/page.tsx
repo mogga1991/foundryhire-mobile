@@ -41,6 +41,10 @@ import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { InterviewVideoPanel } from '@/components/interviews/interview-video-panel'
 import { InterviewFeedbackForm } from '@/components/interviews/interview-feedback-form'
+import { TranscriptViewer } from '@/components/interviews/transcript-viewer'
+import { RecordingPlayer } from '@/components/interviews/recording-player'
+import { ErrorBoundary } from '@/components/error-boundary'
+import { InterviewErrorFallback } from '@/components/interviews/interview-error-fallback'
 
 export const metadata = {
   title: 'Interview Details | VerticalHire',
@@ -139,6 +143,24 @@ export default async function InterviewDetailPage({ params }: InterviewDetailPag
     answer?: string
     completed: boolean
   }>) || []
+
+  // Try to fetch enhanced analysis for key moments
+  // Note: This would ideally come from the interview record if stored
+  // For now, we'll pass empty array and rely on competency scores
+  const keyMoments: Array<{
+    timestamp: string
+    quote: string
+    significance: string
+    sentiment: string
+  }> = []
+
+  // Transform competency scores for transcript viewer
+  const competencyEvidence = competencyScores ? {
+    technical: { score: competencyScores.technical, evidence: [] },
+    communication: { score: competencyScores.communication, evidence: [] },
+    safety: { score: competencyScores.safety, evidence: [] },
+    cultureFit: { score: competencyScores.cultureFit, evidence: [] },
+  } : undefined
 
   const recMap: Record<string, { label: string; color: string }> = {
     strong_hire: { label: 'Strong Hire', color: 'bg-green-100 text-green-800' },
@@ -304,23 +326,43 @@ export default async function InterviewDetailPage({ params }: InterviewDetailPag
             </Card>
           )}
 
-          {/* Transcript */}
-          {interview.transcript && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Interview Transcript
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="max-h-96 overflow-y-auto bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-                  <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                    {interview.transcript}
-                  </pre>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Recording Player with Synced Transcript */}
+          {interview.recordingUrl && (
+            <ErrorBoundary
+              fallback={
+                <InterviewErrorFallback
+                  section="video"
+                  onReset={() => window.location.reload()}
+                />
+              }
+              resetKeys={[interview.recordingUrl]}
+            >
+              <RecordingPlayer
+                recordingUrl={interview.recordingUrl}
+                transcript={interview.transcript || undefined}
+                keyMoments={keyMoments}
+                duration={interview.durationMinutes ? interview.durationMinutes * 60 : undefined}
+              />
+            </ErrorBoundary>
+          )}
+
+          {/* Transcript Viewer (fallback if no recording) */}
+          {interview.transcript && !interview.recordingUrl && (
+            <ErrorBoundary
+              fallback={
+                <InterviewErrorFallback
+                  section="transcript"
+                  onReset={() => window.location.reload()}
+                />
+              }
+              resetKeys={[interview.transcript]}
+            >
+              <TranscriptViewer
+                transcript={interview.transcript}
+                keyMoments={keyMoments}
+                competencyScores={competencyEvidence}
+              />
+            </ErrorBoundary>
           )}
 
           {/* Feedback Section */}
@@ -418,7 +460,7 @@ export default async function InterviewDetailPage({ params }: InterviewDetailPag
             </CardContent>
           </Card>
 
-          {/* Recording */}
+          {/* Recording Download (only if recording exists, player is shown in main content) */}
           {interview.recordingUrl && (
             <Card>
               <CardHeader>
@@ -427,15 +469,15 @@ export default async function InterviewDetailPage({ params }: InterviewDetailPag
                   Recording
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-sm text-muted-foreground">
+                <p className="mb-3">View the recording with synced transcript in the main area</p>
                 <a
                   href={interview.recordingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  download
                 >
-                  <Button variant="outline" className="w-full gap-2">
+                  <Button variant="outline" size="sm" className="w-full gap-2">
                     <Video className="h-4 w-4" />
-                    Watch Recording
+                    Download
                   </Button>
                 </a>
               </CardContent>

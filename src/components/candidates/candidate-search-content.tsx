@@ -60,7 +60,9 @@ export function CandidateSearchContent() {
         setCandidates(data.candidates || [])
       }
     } catch (error) {
-      console.error('Failed to fetch candidates:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to fetch candidates:', error)
+      }
     } finally {
       setIsLoading(false)
     }

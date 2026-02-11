@@ -142,16 +142,95 @@ export async function queueEnrichmentForCandidate(
 
 /**
  * Queue enrichment for multiple candidates.
+ * Optimized to fetch all candidates at once and batch insert tasks.
  */
 export async function queueEnrichmentBatch(
   candidateIds: string[],
   companyId: string
 ): Promise<number> {
-  let totalQueued = 0
-  for (const id of candidateIds) {
-    totalQueued += await queueEnrichmentForCandidate(id, companyId)
+  if (candidateIds.length === 0) return 0
+
+  // Fetch all candidates at once to avoid N+1
+  const candidateList = await db
+    .select()
+    .from(candidates)
+    .where(inArray(candidates.id, candidateIds))
+
+  const now = new Date()
+  const allTasks: Array<typeof enrichmentQueue.$inferInsert> = []
+  const candidateUpdates: Array<{ id: string; status: 'pending' | 'complete' }> = []
+
+  // Analyze each candidate and determine which tasks are needed
+  for (const candidate of candidateList) {
+    const tasks: Array<{ type: EnrichmentType; priority: number }> = []
+
+    // Check what's missing
+    if (!candidate.email || candidate.email === '') {
+      tasks.push({ type: 'email_find', priority: ENRICHMENT_PRIORITIES.email_find })
+    } else if (!candidate.emailVerified) {
+      tasks.push({ type: 'email_verify', priority: ENRICHMENT_PRIORITIES.email_verify })
+    }
+
+    if (!candidate.phone) {
+      tasks.push({ type: 'phone_find', priority: ENRICHMENT_PRIORITIES.phone_find })
+    } else if (!candidate.phoneVerified) {
+      tasks.push({ type: 'phone_verify', priority: ENRICHMENT_PRIORITIES.phone_verify })
+    }
+
+    if (candidate.linkedinUrl && !candidate.linkedinScrapedAt) {
+      tasks.push({
+        type: 'linkedin_profile',
+        priority: ENRICHMENT_PRIORITIES.linkedin_profile,
+      })
+    }
+
+    if (!candidate.companyInfo && candidate.currentCompany) {
+      tasks.push({ type: 'company_info', priority: ENRICHMENT_PRIORITIES.company_info })
+    }
+
+    if (!candidate.aiScore || candidate.aiScore === 0) {
+      tasks.push({ type: 'ai_score', priority: ENRICHMENT_PRIORITIES.ai_score })
+    }
+
+    if (tasks.length === 0) {
+      // Candidate is fully enriched
+      candidateUpdates.push({ id: candidate.id, status: 'complete' })
+    } else {
+      // Add tasks to batch
+      for (const task of tasks) {
+        allTasks.push({
+          candidateId: candidate.id,
+          companyId,
+          enrichmentType: task.type,
+          status: 'pending',
+          priority: task.priority,
+          attempts: 0,
+          maxAttempts: 3,
+          nextAttemptAt: now,
+          createdAt: now,
+          updatedAt: now,
+        })
+      }
+      candidateUpdates.push({ id: candidate.id, status: 'pending' })
+    }
   }
-  return totalQueued
+
+  // Batch insert all tasks
+  if (allTasks.length > 0) {
+    await db.insert(enrichmentQueue).values(allTasks)
+  }
+
+  // Batch update candidate statuses
+  if (candidateUpdates.length > 0) {
+    for (const update of candidateUpdates) {
+      await db
+        .update(candidates)
+        .set({ enrichmentStatus: update.status, updatedAt: new Date() })
+        .where(eq(candidates.id, update.id))
+    }
+  }
+
+  return allTasks.length
 }
 
 // =============================================================================

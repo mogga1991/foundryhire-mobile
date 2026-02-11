@@ -3,8 +3,12 @@ import { requireAuth, requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { companies, companyUsers, subscriptions, users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+import { createLogger } from '@/lib/logger'
 
-export async function POST(request: NextRequest) {
+const logger = createLogger('api:company')
+
+async function _POST(request: NextRequest) {
   try {
     const user = await requireAuth()
 
@@ -61,10 +65,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, companyId: company.id })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    console.error('POST /api/company error:', error)
+    logger.error({
+      message: 'Error creating company',
+      error,
+    })
     const message = error instanceof Error ? error.message : 'Internal server error'
     return NextResponse.json({ error: message }, { status: 500 })
   }
@@ -131,7 +141,7 @@ export async function GET() {
   }
 }
 
-export async function PATCH(request: NextRequest) {
+async function _PATCH(request: NextRequest) {
   try {
     const { companyId } = await requireCompanyAccess()
 
@@ -161,6 +171,9 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ company: updated })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -171,3 +184,6 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })
+export const PATCH = withApiMiddleware(_PATCH, { csrfProtection: true })

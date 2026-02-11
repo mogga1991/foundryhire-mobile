@@ -63,6 +63,9 @@ export async function POST(request: NextRequest) {
       user: { id: user.id, email: user.email, name: user.name },
     })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     logger.error({ error }, 'Login failed')
     return NextResponse.json(
       { error: 'Failed to sign in' },

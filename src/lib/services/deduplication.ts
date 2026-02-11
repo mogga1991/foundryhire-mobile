@@ -14,7 +14,10 @@
 
 import { db } from '@/lib/db'
 import { candidates } from '@/lib/db/schema'
-import { eq, and, or, sql, ilike } from 'drizzle-orm'
+import { eq, and, sql, ilike } from 'drizzle-orm'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('service:deduplication')
 
 // =============================================================================
 // Types
@@ -383,7 +386,7 @@ export async function deduplicateBatch(
       else if (result.action === 'update') stats.updated++
       else stats.skipped++
     } catch (error) {
-      console.error(`[Dedup] Error processing ${input.firstName} ${input.lastName}:`, error)
+      logger.error({ message: 'Error processing candidate', firstName: input.firstName, lastName: input.lastName, error })
       results.push({
         action: 'skip',
         candidateId: null,

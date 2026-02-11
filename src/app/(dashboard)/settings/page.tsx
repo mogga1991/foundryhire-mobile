@@ -74,7 +74,9 @@ export default function ProfileSettingsPage() {
 
       toast.success('Profile updated successfully')
     } catch (err) {
-      console.error('Error updating profile:', err)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Error updating profile:', err)
+      }
       toast.error('An unexpected error occurred')
     } finally {
       setLoading(false)

@@ -13,7 +13,11 @@
  * - Company/organization data
  */
 
-const APOLLO_API_KEY = process.env.APOLLO_API_KEY || ''
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('integration:apollo')
+const APOLLO_API_KEY = env.APOLLO_API_KEY || ''
 const APOLLO_BASE_URL = 'https://api.apollo.io/v1'
 
 // =============================================================================
@@ -98,7 +102,7 @@ export async function searchPeople(
     const data = await response.json()
     return data.people || []
   } catch (error) {
-    console.error('[Apollo] Search error:', error)
+    logger.error({ message: 'Search error', error })
     return []
   }
 }
@@ -161,7 +165,7 @@ export async function enrichPerson(
     const data = await response.json()
     return data.person || null
   } catch (error) {
-    console.error('[Apollo] Enrichment error:', error)
+    logger.error({ message: 'Enrichment error', error })
     return null
   }
 }
@@ -191,7 +195,7 @@ export async function enrichPeopleBulk(
     const data = await response.json()
     return data.people || []
   } catch (error) {
-    console.error('[Apollo] Bulk enrichment error:', error)
+    logger.error({ message: 'Bulk enrichment error', error })
     return []
   }
 }
@@ -222,7 +226,7 @@ export async function enrichOrganization(domain: string) {
     const data = await response.json()
     return data.organization || null
   } catch (error) {
-    console.error('[Apollo] Organization enrichment error:', error)
+    logger.error({ message: 'Organization enrichment error', error })
     return null
   }
 }

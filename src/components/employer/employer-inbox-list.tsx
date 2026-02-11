@@ -47,7 +47,9 @@ export function EmployerInboxList() {
         setReachOuts(data.reachOuts || [])
       }
     } catch (error) {
-      console.error('Failed to fetch reach-outs:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to fetch reach-outs:', error)
+      }
     } finally {
       setIsLoading(false)
     }

@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
+import { createLogger } from '@/lib/logger'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { sql } from 'drizzle-orm'
+
+const logger = createLogger('api:health:db')
 
 export async function GET() {
   try {
@@ -18,7 +21,7 @@ export async function GET() {
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
-    console.error('Database health check failed:', error)
+    logger.error({ message: 'Database health check failed', error })
     return NextResponse.json(
       {
         status: 'unhealthy',

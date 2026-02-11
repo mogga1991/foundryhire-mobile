@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { domainIdentities } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { ResendProvider } from '@/lib/email/providers/resend-provider'
 
-export async function POST(
+async function _POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -63,3 +64,5 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

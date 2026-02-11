@@ -13,16 +13,20 @@
 
 import * as Apollo from './apollo'
 import * as Coresignal from './coresignal'
-import * as Proxycurl from './proxycurl'
 import * as Lusha from './lusha'
+// @ts-ignore - apify-client has broken type definitions referencing non-existent src/ paths
 import { ApifyClient } from 'apify-client'
 import { scoreCandidate } from '@/lib/ai/mistral'
 import { db } from '@/lib/db'
 import { apiUsage } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('integration:free-tier-orchestrator')
 
 const apifyClient = new ApifyClient({
-  token: process.env.APIFY_API_TOKEN || '',
+  token: env.APIFY_API_TOKEN || '',
 })
 
 // =============================================================================
@@ -137,8 +141,8 @@ export async function generateFreeLeads(
   leads: FreeTierLead[]
   stats: FreeTierStats
 }> {
-  console.log('[Free Tier] Starting lead generation...')
-  console.log(`[Free Tier] Target: ${maxLeads} leads`)
+  logger.info({ message: 'Starting lead generation' })
+  logger.info({ message: 'Target leads', maxLeads })
 
   // Enforce Apify limit
   const safeMaxLeads = Math.min(maxLeads, FREE_TIER_LIMITS.apify.maxLeads)
@@ -174,7 +178,7 @@ export async function generateFreeLeads(
   // =============================================================================
 
   if (activeSources.includes('linkedin')) {
-  console.log('[Free Tier] Stage 1A: Leads Finder (code_crafter/leads-finder)...')
+  logger.info({ message: 'Stage 1A: Leads Finder (code_crafter/leads-finder)' })
 
   try {
     // Use Leads Finder actor for richer data: emails, phones, LinkedIn URLs, company firmographics
@@ -238,9 +242,9 @@ export async function generateFreeLeads(
       stats.apifyUsed++
     }
 
-    console.log(`[Free Tier] Leads Finder found ${leads.length} leads`)
+    logger.info({ message: 'Leads Finder found leads', count: leads.length })
   } catch (error) {
-    console.error('[Free Tier] Leads Finder error:', error)
+    logger.error({ message: 'Leads Finder error', error })
   }
   } // end LinkedIn source
 
@@ -249,7 +253,7 @@ export async function generateFreeLeads(
   // =============================================================================
 
   if (activeSources.includes('indeed')) {
-    console.log('[Free Tier] Stage 1B: Indeed scraping...')
+    logger.info({ message: 'Stage 1B: Indeed scraping' })
 
     try {
       const indeedRun = await apifyClient.actor('misceres/indeed-scraper').call({
@@ -301,9 +305,9 @@ export async function generateFreeLeads(
         stats.indeedUsed++
       }
 
-      console.log(`[Free Tier] Indeed found ${stats.indeedUsed} leads`)
+      logger.info({ message: 'Indeed found leads', count: stats.indeedUsed })
     } catch (error) {
-      console.error('[Free Tier] Indeed scraping error:', error)
+      logger.error({ message: 'Indeed scraping error', error })
     }
   }
 
@@ -311,7 +315,7 @@ export async function generateFreeLeads(
   // STAGE 2: ENRICHMENT - Fill Missing Data (Free Tiers Only)
   // =============================================================================
 
-  console.log('[Free Tier] Stage 2: Enrichment...')
+  logger.info({ message: 'Stage 2: Enrichment' })
 
   // Track API usage to stay within free limits
   let apolloUsed = 0
@@ -323,7 +327,7 @@ export async function generateFreeLeads(
     const needsEnrichment = !lead.email || !lead.phone
 
     if (!needsEnrichment) {
-      console.log(`[Free Tier] Lead ${lead.fullName} already complete, skipping enrichment`)
+      logger.info({ message: 'Lead already complete, skipping enrichment', leadName: lead.fullName })
       continue
     }
 
@@ -354,7 +358,7 @@ export async function generateFreeLeads(
             }
           }
         } catch (error) {
-          console.warn(`[Free Tier] Apollo enrichment failed for ${lead.fullName}`)
+          logger.warn({ message: 'Apollo enrichment failed', leadName: lead.fullName })
         }
       }
     }
@@ -383,7 +387,7 @@ export async function generateFreeLeads(
             await sleep(200)
           }
         } catch (error) {
-          console.warn(`[Free Tier] Lusha enrichment failed for ${lead.fullName}`)
+          logger.warn({ message: 'Lusha enrichment failed', leadName: lead.fullName })
         }
       }
     }
@@ -433,7 +437,7 @@ export async function generateFreeLeads(
             await sleep(1000)
           }
         } catch (error) {
-          console.warn(`[Free Tier] Coresignal enrichment failed for ${lead.fullName}`)
+          logger.warn({ message: 'Coresignal enrichment failed', leadName: lead.fullName })
         }
       }
     }
@@ -459,7 +463,7 @@ export async function generateFreeLeads(
   // STAGE 3: AI SCORING (Very Cheap - $0.01 per lead)
   // =============================================================================
 
-  console.log('[Free Tier] Stage 3: AI Scoring...')
+  logger.info({ message: 'Stage 3: AI Scoring' })
 
   for (const lead of leads) {
     try {
@@ -478,7 +482,7 @@ Industry: Construction`
       lead.matchScore = result.score || 50
       lead.matchReasons = result.reasons || []
     } catch (error) {
-      console.warn(`[Free Tier] AI scoring failed for ${lead.fullName}`)
+      logger.warn({ message: 'AI scoring failed', leadName: lead.fullName })
       lead.matchScore = 50
       lead.matchReasons = ['Auto-scored']
     }
@@ -503,12 +507,14 @@ Industry: Construction`
     stats.totalLeads * FREE_TIER_LIMITS.mistral.costPerScore
   stats.remainingApifyCredits = FREE_TIER_LIMITS.apify.maxLeads - stats.apifyUsed
 
-  console.log('[Free Tier] Complete!')
-  console.log(`[Free Tier] Total leads: ${stats.totalLeads}`)
-  console.log(`[Free Tier] Avg completeness: ${stats.avgDataCompleteness}%`)
-  console.log(`[Free Tier] Avg match score: ${stats.avgMatchScore}/100`)
-  console.log(`[Free Tier] Estimated cost: $${stats.estimatedCost.toFixed(2)}`)
-  console.log(`[Free Tier] Remaining Apify credits: ${stats.remainingApifyCredits}`)
+  logger.info({
+    message: 'Lead generation complete',
+    totalLeads: stats.totalLeads,
+    avgDataCompleteness: stats.avgDataCompleteness,
+    avgMatchScore: stats.avgMatchScore,
+    estimatedCost: stats.estimatedCost.toFixed(2),
+    remainingApifyCredits: stats.remainingApifyCredits
+  })
 
   // Update usage tracking in database
   if (companyId) {
@@ -521,9 +527,9 @@ Industry: Construction`
         proxycurlCalls: stats.proxycurlUsed,
         costInCents: Math.round(stats.estimatedCost * 100), // Convert to cents
       })
-      console.log('[Free Tier] Usage tracking updated in database')
+      logger.info({ message: 'Usage tracking updated in database' })
     } catch (error) {
-      console.error('[Free Tier] Failed to update usage tracking:', error)
+      logger.error({ message: 'Failed to update usage tracking', error })
     }
   }
 

@@ -1,42 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
-import { candidateUsers } from '@/lib/db/schema'
-import { sql, or, and, ilike, gte, lte } from 'drizzle-orm'
+import { candidates } from '@/lib/db/schema'
+import { sql, or, and, ilike, gte, lte, eq } from 'drizzle-orm'
 import { createLogger } from '@/lib/logger'
+import { rateLimit, getIpIdentifier } from '@/lib/rate-limit'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+import { escapeLikePattern } from '@/lib/utils/sql-escape'
 
 const logger = createLogger('candidate-search')
 
-export async function GET(req: NextRequest) {
+async function _GET(req: NextRequest) {
   try {
+    // Rate limit: 30 searches per minute per IP
+    const rateLimitResult = await rateLimit(req, {
+      limit: 30,
+      window: 60000,
+      identifier: (r) => getIpIdentifier(r),
+    })
+    if (rateLimitResult) return rateLimitResult
+
+    // Require authentication and company access
+    const { companyId } = await requireCompanyAccess()
+
     const searchParams = req.nextUrl.searchParams
     const query = searchParams.get('q') || ''
     const location = searchParams.get('location') || ''
     const experience = searchParams.get('experience') || ''
 
-    // Build query conditions
-    const conditions = []
+    // Build query conditions - always filter by company
+    const conditions = [eq(candidates.companyId, companyId)]
 
     // Text search across multiple fields
     if (query) {
+      const escapedQuery = escapeLikePattern(query)
       conditions.push(
         or(
-          ilike(candidateUsers.firstName, `%${query}%`),
-          ilike(candidateUsers.lastName, `%${query}%`),
-          ilike(candidateUsers.currentTitle, `%${query}%`),
-          ilike(candidateUsers.currentCompany, `%${query}%`),
-          ilike(candidateUsers.bio, `%${query}%`),
+          ilike(candidates.firstName, `%${escapedQuery}%`),
+          ilike(candidates.lastName, `%${escapedQuery}%`),
+          ilike(candidates.currentTitle, `%${escapedQuery}%`),
+          ilike(candidates.currentCompany, `%${escapedQuery}%`),
+          ilike(candidates.notes, `%${escapedQuery}%`),
           sql`EXISTS (
-            SELECT 1 FROM unnest(${candidateUsers.skills}) AS skill
-            WHERE LOWER(skill) LIKE LOWER(${`%${query}%`})
+            SELECT 1 FROM unnest(${candidates.skills}) AS skill
+            WHERE LOWER(skill) LIKE LOWER(${`%${escapedQuery}%`})
           )`
-        )
+        )!
       )
     }
 
     // Location filter
     if (location) {
+      const escapedLocation = escapeLikePattern(location)
       conditions.push(
-        ilike(candidateUsers.location, `%${location}%`)
+        ilike(candidates.location, `%${escapedLocation}%`)
       )
     }
 
@@ -46,62 +63,67 @@ export async function GET(req: NextRequest) {
         case '0-2':
           conditions.push(
             and(
-              gte(candidateUsers.experienceYears, 0),
-              lte(candidateUsers.experienceYears, 2)
-            )
+              gte(candidates.experienceYears, 0),
+              lte(candidates.experienceYears, 2)
+            )!
           )
           break
         case '3-5':
           conditions.push(
             and(
-              gte(candidateUsers.experienceYears, 3),
-              lte(candidateUsers.experienceYears, 5)
-            )
+              gte(candidates.experienceYears, 3),
+              lte(candidates.experienceYears, 5)
+            )!
           )
           break
         case '6-10':
           conditions.push(
             and(
-              gte(candidateUsers.experienceYears, 6),
-              lte(candidateUsers.experienceYears, 10)
-            )
+              gte(candidates.experienceYears, 6),
+              lte(candidates.experienceYears, 10)
+            )!
           )
           break
         case '10+':
           conditions.push(
-            gte(candidateUsers.experienceYears, 10)
+            gte(candidates.experienceYears, 10)
           )
           break
       }
     }
 
-    // Execute search
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+    // Execute search with company filter applied
+    const whereClause = and(...conditions)
 
     const results = await db.select({
-      id: candidateUsers.id,
-      firstName: candidateUsers.firstName,
-      lastName: candidateUsers.lastName,
-      email: candidateUsers.email,
-      profileImageUrl: candidateUsers.profileImageUrl,
-      location: candidateUsers.location,
-      currentTitle: candidateUsers.currentTitle,
-      currentCompany: candidateUsers.currentCompany,
-      experienceYears: candidateUsers.experienceYears,
-      skills: candidateUsers.skills,
-      bio: candidateUsers.bio,
-      resumeUrl: candidateUsers.resumeUrl,
-      createdAt: candidateUsers.createdAt,
+      id: candidates.id,
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      email: candidates.email,
+      profileImageUrl: candidates.profileImageUrl,
+      location: candidates.location,
+      currentTitle: candidates.currentTitle,
+      currentCompany: candidates.currentCompany,
+      experienceYears: candidates.experienceYears,
+      skills: candidates.skills,
+      status: candidates.status,
+      stage: candidates.stage,
+      aiScore: candidates.aiScore,
+      createdAt: candidates.createdAt,
     })
-      .from(candidateUsers)
+      .from(candidates)
       .where(whereClause)
-      .orderBy(sql`${candidateUsers.createdAt} DESC`)
+      .orderBy(sql`${candidates.createdAt} DESC`)
       .limit(50)
 
-    logger.info(
-      { query, location, experience, resultCount: results.length },
-      'Candidate search executed'
-    )
+    logger.info({
+      message: 'Candidate search executed',
+      companyId,
+      query,
+      location,
+      experience,
+      resultCount: results.length,
+    })
 
     return NextResponse.json({
       success: true,
@@ -109,10 +131,19 @@ export async function GET(req: NextRequest) {
       count: results.length,
     })
   } catch (error) {
-    logger.error({ error }, 'Failed to search candidates')
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error instanceof Error && error.message === 'No company found for user') {
+      return NextResponse.json({ error: 'No company set up. Please create your company in Settings first.' }, { status: 400 })
+    }
+    logger.error({ message: 'Failed to search candidates', error })
     return NextResponse.json(
       { error: 'Failed to search candidates' },
       { status: 500 }
     )
   }
 }
+
+// Export wrapped handler with request tracing middleware
+export const GET = withApiMiddleware(_GET)

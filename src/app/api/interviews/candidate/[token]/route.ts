@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { interviews, interviewTimeSlots, candidates, companies } from '@/lib/db/schema'
+import { interviews, interviewTimeSlots, candidates, companies, jobs } from '@/lib/db/schema'
 import { eq, and, gt } from 'drizzle-orm'
+import { rateLimit, RateLimitPresets, getEndpointIdentifier } from '@/lib/rate-limit'
+import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+
+const logger = createLogger('api:interview-candidate-portal')
 
 interface RouteParams {
   params: Promise<{ token: string }>
@@ -23,15 +28,28 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         location: interviews.location,
         phoneNumber: interviews.phoneNumber,
         status: interviews.status,
+        passcode: interviews.passcode,
+        zoomJoinUrl: interviews.zoomJoinUrl,
+        zoomMeetingId: interviews.zoomMeetingId,
+        interviewQuestions: interviews.interviewQuestions,
         candidateFirstName: candidates.firstName,
         candidateLastName: candidates.lastName,
         candidateEmail: candidates.email,
         companyName: companies.name,
+        companyWebsite: companies.website,
         companyId: interviews.companyId,
+        jobId: interviews.jobId,
+        jobTitle: jobs.title,
+        jobLocation: jobs.location,
+        jobDepartment: jobs.department,
+        jobDescription: jobs.description,
+        jobRequirements: jobs.requirements,
+        jobSkillsRequired: jobs.skillsRequired,
       })
       .from(interviews)
       .innerJoin(candidates, eq(interviews.candidateId, candidates.id))
       .innerJoin(companies, eq(interviews.companyId, companies.id))
+      .leftJoin(jobs, eq(interviews.jobId, jobs.id))
       .where(
         and(
           eq(interviews.candidatePortalToken, token),
@@ -89,6 +107,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         location: interview.location,
         phoneNumber: interview.phoneNumber,
         status: interview.status,
+        passcode: interview.passcode,
+        zoomJoinUrl: interview.zoomJoinUrl,
+        zoomMeetingId: interview.zoomMeetingId,
+        questions: interview.interviewQuestions || [],
+      },
+      candidate: {
+        firstName: interview.candidateFirstName,
+        lastName: interview.candidateLastName,
+      },
+      job: interview.jobTitle ? {
+        title: interview.jobTitle,
+        location: interview.jobLocation,
+        department: interview.jobDepartment,
+        description: interview.jobDescription,
+        requirements: interview.jobRequirements,
+        skillsRequired: interview.jobSkillsRequired,
+      } : null,
+      company: {
+        name: interview.companyName,
+        website: interview.companyWebsite,
       },
       timeSlots: timeSlots.map((slot) => ({
         id: slot.id,
@@ -111,7 +149,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       })),
     })
   } catch (error) {
-    console.error('Error fetching interview details:', error)
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    logger.error({ message: 'Error fetching interview details', error })
     return NextResponse.json(
       { error: 'Failed to fetch interview details' },
       { status: 500 }
@@ -119,15 +160,33 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// POST /api/interviews/candidate/[token]/confirm - Candidate confirms a time slot
-export async function POST(request: NextRequest, { params }: RouteParams) {
+// POST /api/interviews/candidate/[token] - Candidate confirms or declines interview
+// Supports both time slot selection and direct confirmation/decline
+async function _POST(request: NextRequest, { params }: RouteParams) {
+  // Apply rate limiting: 5 requests per minute
+  const rateLimitResponse = await rateLimit(request, {
+    ...RateLimitPresets.strict,
+    identifier: (req) => getEndpointIdentifier(req, 'interview-confirm'),
+  })
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
     const { token } = await params
-    const { timeSlotId } = await request.json()
+    const body = await request.json()
+    const { timeSlotId, status: confirmStatus, declineReason } = body
 
-    if (!timeSlotId) {
+    // Validate input - either timeSlotId OR status must be provided
+    if (!timeSlotId && !confirmStatus) {
       return NextResponse.json(
-        { error: 'timeSlotId is required' },
+        { error: 'Either timeSlotId or status is required' },
+        { status: 400 }
+      )
+    }
+
+    // Validate status if provided
+    if (confirmStatus && !['confirmed', 'declined'].includes(confirmStatus)) {
+      return NextResponse.json(
+        { error: 'Status must be either "confirmed" or "declined"' },
         { status: 400 }
       )
     }
@@ -138,6 +197,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         id: interviews.id,
         candidateId: interviews.candidateId,
         companyId: interviews.companyId,
+        status: interviews.status,
       })
       .from(interviews)
       .where(
@@ -155,57 +215,106 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // Get the selected time slot
-    const [timeSlot] = await db
-      .select()
-      .from(interviewTimeSlots)
-      .where(eq(interviewTimeSlots.id, timeSlotId))
-      .limit(1)
+    // Handle time slot selection (existing functionality)
+    if (timeSlotId) {
+      // Get the selected time slot
+      const [timeSlot] = await db
+        .select()
+        .from(interviewTimeSlots)
+        .where(eq(interviewTimeSlots.id, timeSlotId))
+        .limit(1)
 
-    if (!timeSlot) {
-      return NextResponse.json({ error: 'Time slot not found' }, { status: 404 })
+      if (!timeSlot) {
+        return NextResponse.json({ error: 'Time slot not found' }, { status: 404 })
+      }
+
+      // Update interview with selected time
+      await db
+        .update(interviews)
+        .set({
+          scheduledAt: timeSlot.startTime,
+          durationMinutes: Math.round(
+            (timeSlot.endTime.getTime() - timeSlot.startTime.getTime()) / 60000
+          ),
+          status: 'confirmed',
+          updatedAt: new Date(),
+        })
+        .where(eq(interviews.id, interview.id))
+
+      // Update time slot status
+      await db
+        .update(interviewTimeSlots)
+        .set({ status: 'selected' })
+        .where(eq(interviewTimeSlots.id, timeSlotId))
+
+      // Mark other slots as rejected
+      await db
+        .update(interviewTimeSlots)
+        .set({ status: 'rejected' })
+        .where(
+          and(
+            eq(interviewTimeSlots.candidateId, interview.candidateId),
+            eq(interviewTimeSlots.companyId, interview.companyId),
+            eq(interviewTimeSlots.status, 'suggested')
+          )
+        )
+
+      return NextResponse.json({
+        success: true,
+        status: 'confirmed',
+        scheduledAt: timeSlot.startTime,
+      })
     }
 
-    // Update interview with selected time
-    await db
-      .update(interviews)
-      .set({
-        scheduledAt: timeSlot.startTime,
-        durationMinutes: Math.round(
-          (timeSlot.endTime.getTime() - timeSlot.startTime.getTime()) / 60000
-        ),
+    // Handle direct confirmation/decline
+    if (confirmStatus === 'confirmed') {
+      // Update interview status to confirmed
+      const [updatedInterview] = await db
+        .update(interviews)
+        .set({
+          status: 'confirmed',
+          updatedAt: new Date(),
+        })
+        .where(eq(interviews.id, interview.id))
+        .returning()
+
+      return NextResponse.json({
+        success: true,
         status: 'confirmed',
-        updatedAt: new Date(),
+        interview: updatedInterview,
       })
-      .where(eq(interviews.id, interview.id))
+    }
 
-    // Update time slot status
-    await db
-      .update(interviewTimeSlots)
-      .set({ status: 'selected' })
-      .where(eq(interviewTimeSlots.id, timeSlotId))
+    if (confirmStatus === 'declined') {
+      // Update interview status to cancelled with decline reason
+      const [updatedInterview] = await db
+        .update(interviews)
+        .set({
+          status: 'cancelled',
+          cancelReason: declineReason || 'Candidate declined',
+          updatedAt: new Date(),
+        })
+        .where(eq(interviews.id, interview.id))
+        .returning()
 
-    // Mark other slots as rejected
-    await db
-      .update(interviewTimeSlots)
-      .set({ status: 'rejected' })
-      .where(
-        and(
-          eq(interviewTimeSlots.candidateId, interview.candidateId),
-          eq(interviewTimeSlots.companyId, interview.companyId),
-          eq(interviewTimeSlots.status, 'suggested')
-        )
-      )
+      return NextResponse.json({
+        success: true,
+        status: 'declined',
+        interview: updatedInterview,
+      })
+    }
 
-    return NextResponse.json({
-      success: true,
-      scheduledAt: timeSlot.startTime,
-    })
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   } catch (error) {
-    console.error('Error confirming interview time:', error)
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    logger.error({ message: 'Error processing interview confirmation', error })
     return NextResponse.json(
-      { error: 'Failed to confirm interview time' },
+      { error: 'Failed to process interview confirmation' },
       { status: 500 }
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

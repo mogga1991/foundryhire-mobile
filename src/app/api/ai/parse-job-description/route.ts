@@ -1,27 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { generateJSON } from '@/lib/ai/mistral'
 import {
   buildParseJobDescriptionPrompt,
   type ParseJobDescriptionResult,
 } from '@/lib/ai/prompts/parse-job-description'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+import { createLogger } from '@/lib/logger'
 
-export async function POST(request: NextRequest) {
+const logger = createLogger('api:ai:parse-job-description')
+
+const parseJobDescriptionRequestSchema = z.object({
+  text: z.string().min(50, 'Job description text must be at least 50 characters long'),
+  documentUrl: z.string().optional(),
+})
+
+async function _POST(request: NextRequest) {
   try {
     await requireCompanyAccess()
 
     const body = await request.json()
-    const { text, documentUrl } = body
-
-    if (!text || typeof text !== 'string') {
-      return NextResponse.json({ error: 'text is required and must be a string' }, { status: 400 })
-    }
-
-    if (text.trim().length < 50) {
-      return NextResponse.json({
-        error: 'Job description text must be at least 50 characters long',
-      }, { status: 400 })
-    }
+    const { text, documentUrl } = parseJobDescriptionRequestSchema.parse(body)
 
     // Build the parsing prompt
     const prompt = buildParseJobDescriptionPrompt(text)
@@ -56,6 +56,15 @@ export async function POST(request: NextRequest) {
       data: responseData,
     })
   } catch (err) {
+    if (err instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    if (err instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: err.issues },
+        { status: 400 }
+      )
+    }
     if (err instanceof Error && err.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -63,10 +72,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No company set up. Please create your company in Settings first.' }, { status: 400 })
     }
     const message = err instanceof Error ? err.message : 'Failed to parse job description'
-    console.error('Parse job description error:', message)
+    logger.error({ message: 'Parse job description error', error: err })
     return NextResponse.json({
       error: message,
       success: false,
     }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

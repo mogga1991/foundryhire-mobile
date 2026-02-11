@@ -1,3 +1,8 @@
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('email:offer-rejected')
+
 interface OfferRejectedParams {
   recruiterEmail: string
   recruiterName: string
@@ -118,19 +123,21 @@ Consider reaching out to understand their decision better and maintain a positiv
 This notification was sent via VerticalHire recruitment platform.`
 
   // Use Resend if available, otherwise log
-  if (process.env.RESEND_API_KEY) {
+  if (env.RESEND_API_KEY) {
     const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
+    const resend = new Resend(env.RESEND_API_KEY)
 
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'notifications@verticalhire.com',
+      from: env.RESEND_FROM_EMAIL || 'notifications@verticalhire.com',
       to: recruiterEmail,
       subject,
       html: htmlBody,
       text: textBody,
     })
   } else {
-    console.log(`[Offer Rejected] Would send to ${recruiterEmail}:`, {
+    logger.info({
+      message: 'Would send offer rejected notification (no RESEND_API_KEY)',
+      recruiterEmail,
       subject,
       candidateName,
       jobTitle,

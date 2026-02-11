@@ -3,6 +3,7 @@ import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { emailAccounts, emailAccountSecrets } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 export async function GET(
   _request: NextRequest,
@@ -32,7 +33,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
+async function _PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -75,6 +76,9 @@ export async function PATCH(
 
     return NextResponse.json({ data: updated })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -83,7 +87,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function _DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -119,3 +123,6 @@ export async function DELETE(
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const PATCH = withApiMiddleware(_PATCH, { csrfProtection: true })
+export const DELETE = withApiMiddleware(_DELETE, { csrfProtection: true })

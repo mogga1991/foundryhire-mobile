@@ -1,3 +1,4 @@
+import { env } from '@/lib/env'
 import type { EmailProvider, EmailMessage, EmailSendResult } from '../types'
 
 interface GmailProviderConfig {
@@ -30,8 +31,8 @@ export class GmailProvider implements EmailProvider {
       return this.accessToken
     }
 
-    const clientId = process.env.GOOGLE_CLIENT_ID
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+    const clientId = env.GOOGLE_CLIENT_ID
+    const clientSecret = env.GOOGLE_CLIENT_SECRET
 
     if (!clientId || !clientSecret) {
       throw new Error('Google OAuth credentials not configured')

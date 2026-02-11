@@ -1,3 +1,8 @@
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('email:task-rejected')
+
 interface TaskRejectedParams {
   candidateEmail: string
   candidateName: string
@@ -99,19 +104,21 @@ Don't worry - this is a normal part of the onboarding process. If you have quest
 This notification was sent via VerticalHire onboarding system.`
 
   // Use Resend if available, otherwise log
-  if (process.env.RESEND_API_KEY) {
+  if (env.RESEND_API_KEY) {
     const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
+    const resend = new Resend(env.RESEND_API_KEY)
 
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'onboarding@verticalhire.com',
+      from: env.RESEND_FROM_EMAIL || 'onboarding@verticalhire.com',
       to: candidateEmail,
       subject,
       html: htmlBody,
       text: textBody,
     })
   } else {
-    console.log(`[Task Rejected] Would send to ${candidateEmail}:`, {
+    logger.info({
+      message: 'Would send task rejected notification (no RESEND_API_KEY)',
+      candidateEmail,
       subject,
       taskTitle,
       rejectedBy,

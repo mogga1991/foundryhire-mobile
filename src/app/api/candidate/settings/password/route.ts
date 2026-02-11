@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { rateLimit, getIpIdentifier } from '@/lib/rate-limit'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
@@ -6,6 +7,7 @@ import { candidateUsers } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getCandidateSession } from '@/lib/auth/candidate-session'
 import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 const logger = createLogger('candidate-password-change')
 
@@ -19,8 +21,15 @@ const passwordChangeSchema = z.object({
     .regex(/[0-9]/, 'Password must contain at least one number'),
 })
 
-export async function POST(req: NextRequest) {
+async function _POST(req: NextRequest) {
   try {
+    const rateLimitResult = await rateLimit(req, {
+      limit: 5,
+      window: 60000,
+      identifier: (req) => getIpIdentifier(req),
+    })
+    if (rateLimitResult) return rateLimitResult
+
     const session = await getCandidateSession()
 
     if (!session) {
@@ -78,6 +87,9 @@ export async function POST(req: NextRequest) {
       message: 'Password changed successfully',
     })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.issues },
@@ -92,3 +104,5 @@ export async function POST(req: NextRequest) {
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

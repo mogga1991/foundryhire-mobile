@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { jobs } from '@/lib/db/schema'
@@ -9,24 +10,22 @@ import {
   type ResumeAnalysisResult,
   type ResumeJobDetails,
 } from '@/lib/ai/prompts/resume-analysis'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+import { createLogger } from '@/lib/logger'
 
-export async function POST(request: NextRequest) {
+const logger = createLogger('api:ai:analyze-resume')
+
+const analyzeResumeRequestSchema = z.object({
+  resumeText: z.string().min(1),
+  jobId: z.string().min(1),
+})
+
+async function _POST(request: NextRequest) {
   try {
     const { companyId } = await requireCompanyAccess()
 
     const body = await request.json()
-    const { resumeText, jobId } = body
-
-    if (!resumeText || typeof resumeText !== 'string' || !resumeText.trim()) {
-      return NextResponse.json(
-        { error: 'resumeText is required and must be a non-empty string' },
-        { status: 400 }
-      )
-    }
-
-    if (!jobId) {
-      return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
-    }
+    const { resumeText, jobId } = analyzeResumeRequestSchema.parse(body)
 
     // Fetch job and verify it belongs to this company
     const job = await db.query.jobs.findFirst({
@@ -70,6 +69,15 @@ export async function POST(request: NextRequest) {
       success: true,
     })
   } catch (err) {
+    if (err instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    if (err instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: err.issues },
+        { status: 400 }
+      )
+    }
     if (err instanceof Error && err.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -77,7 +85,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No company set up. Please create your company in Settings first.' }, { status: 400 })
     }
     const message = err instanceof Error ? err.message : 'Failed to analyze resume'
-    console.error('Analyze resume error:', message)
+    logger.error({ message: 'Analyze resume error', error: err })
     return NextResponse.json({ error: message, success: false }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { companies, candidates, jobs } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { generateJSON } from '@/lib/ai/claude'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 interface GenerateEmailBody {
   jobId: string
@@ -24,7 +26,21 @@ interface GeneratedEmailResponse {
   body: string
 }
 
-export async function POST(request: NextRequest) {
+const generateEmailRequestSchema = z.object({
+  jobId: z.string().min(1),
+  candidateId: z.string().optional(),
+  jobTitle: z.string().min(1),
+  jobDescription: z.string().optional(),
+  candidateName: z.string().optional(),
+  candidateCurrentCompany: z.string().optional(),
+  candidateCurrentTitle: z.string().optional(),
+  candidateLocation: z.string().optional(),
+  companyName: z.string().optional(),
+  tone: z.enum(["professional", "casual", "friendly", "formal"]).optional(),
+  customInstructions: z.string().optional(),
+})
+
+async function _POST(request: NextRequest) {
   try {
     const { companyId } = await requireCompanyAccess()
 
@@ -35,11 +51,7 @@ export async function POST(request: NextRequest) {
       .where(eq(companies.id, companyId))
       .limit(1)
 
-    const input: GenerateEmailBody = await request.json()
-
-    if (!input.jobTitle) {
-      return NextResponse.json({ error: 'jobTitle is required' }, { status: 400 })
-    }
+    const input = generateEmailRequestSchema.parse(await request.json())
 
     let candidateDetails = {
       name: input.candidateName || '{{firstName}}',
@@ -129,6 +141,15 @@ Return a JSON object with two fields:
       success: true,
     })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.issues },
+        { status: 400 }
+      )
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -139,3 +160,5 @@ Return a JSON object with two fields:
     return NextResponse.json({ error: message, success: false }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

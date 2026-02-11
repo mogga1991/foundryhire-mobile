@@ -115,7 +115,9 @@ export default function NewCampaignPage({ params }: NewCampaignPageProps) {
 
       const res = await fetch(`/api/candidates?${searchParams.toString()}`)
       if (!res.ok) {
-        console.error('Failed to fetch candidates')
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('Failed to fetch candidates')
+        }
       } else {
         const data = await res.json()
         setCandidates(data.candidates ?? [])
@@ -300,14 +302,21 @@ export default function NewCampaignPage({ params }: NewCampaignPageProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="campaign-name">Campaign Name</Label>
+        <Label htmlFor="campaign-name">
+          Campaign Name <span className="text-destructive" aria-label="required">*</span>
+        </Label>
         <Input
           id="campaign-name"
           placeholder="e.g., Senior Engineer Outreach - January 2026"
+          aria-required="true"
+          aria-invalid={errors.name ? 'true' : 'false'}
+          aria-describedby={errors.name ? 'campaign-name-error' : undefined}
           {...register('name')}
         />
         {errors.name && (
-          <p className="text-xs text-destructive">{errors.name.message}</p>
+          <p id="campaign-name-error" className="text-xs text-destructive" role="alert">
+            {errors.name.message}
+          </p>
         )}
       </div>
 
@@ -430,6 +439,8 @@ export default function NewCampaignPage({ params }: NewCampaignPageProps) {
                 onGenerateWithAI={handleGenerateEmail}
                 isGenerating={generating}
                 showGenerateButton={true}
+                subjectError={errors.subject?.message}
+                bodyError={errors.body?.message}
               />
             </CardContent>
           </Card>

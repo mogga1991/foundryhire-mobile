@@ -11,6 +11,18 @@
     {
       "path": "/api/enrichment/process?batchSize=50",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/interview-reminders",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/webhook-retries",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/data-retention",
+      "schedule": "0 2 * * 0"
     }
   ]
 }

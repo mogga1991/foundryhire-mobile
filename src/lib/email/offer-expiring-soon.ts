@@ -1,3 +1,8 @@
+import { env } from '@/lib/env'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('email:offer-expiring-soon')
+
 interface OfferExpiringSoonParams {
   candidateEmail: string
   candidateName: string
@@ -113,19 +118,21 @@ Please review the offer details and make your decision before the expiration tim
 This reminder was sent via VerticalHire. If you've already responded, please disregard this message.`
 
   // Use Resend if available, otherwise log
-  if (process.env.RESEND_API_KEY) {
+  if (env.RESEND_API_KEY) {
     const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
+    const resend = new Resend(env.RESEND_API_KEY)
 
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'offers@verticalhire.com',
+      from: env.RESEND_FROM_EMAIL || 'offers@verticalhire.com',
       to: candidateEmail,
       subject,
       html: htmlBody,
       text: textBody,
     })
   } else {
-    console.log(`[Offer Expiring Soon] Would send to ${candidateEmail}:`, {
+    logger.info({
+      message: 'Would send offer expiring soon notification (no RESEND_API_KEY)',
+      candidateEmail,
       subject,
       jobTitle,
       hoursRemaining,

@@ -5,6 +5,7 @@ import { candidateUsers } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getCandidateSession } from '@/lib/auth/candidate-session'
 import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 const logger = createLogger('candidate-profile')
 
@@ -21,7 +22,7 @@ const updateProfileSchema = z.object({
   skills: z.array(z.string()).optional(),
 })
 
-export async function PATCH(req: NextRequest) {
+async function _PATCH(req: NextRequest) {
   try {
     const session = await getCandidateSession()
 
@@ -68,6 +69,9 @@ export async function PATCH(req: NextRequest) {
       },
     })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.issues },
@@ -82,3 +86,5 @@ export async function PATCH(req: NextRequest) {
     )
   }
 }
+
+export const PATCH = withApiMiddleware(_PATCH, { csrfProtection: true })

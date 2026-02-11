@@ -7,11 +7,14 @@
  */
 
 import { NextResponse } from 'next/server'
+import { createLogger } from '@/lib/logger'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { companyUsers } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getEnrichmentStatus } from '@/lib/services/enrichment-queue'
+
+const logger = createLogger('api:enrichment:status')
 
 export async function GET() {
   try {
@@ -40,7 +43,7 @@ export async function GET() {
       ...status,
     })
   } catch (error) {
-    console.error('[Enrichment Status] Error:', error)
+    logger.error({ message: 'Failed to get enrichment status', error })
     return NextResponse.json(
       {
         error: 'Failed to get enrichment status',

@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { campaigns, campaignSends, candidates, emailAccounts, emailSuppressions, emailQueue, companies, jobs } from '@/lib/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import { renderTemplate } from '@/lib/email/template'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
-export async function POST(
+async function _POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -186,30 +187,33 @@ export async function POST(
       queued++
     }
 
-    // Batch insert into email queue
-    if (queueItems.length > 0) {
-      await db.insert(emailQueue).values(queueItems)
+    // Batch insert into email queue and update statuses atomically
+    const [updatedCampaign] = await db.transaction(async (tx) => {
+      if (queueItems.length > 0) {
+        await tx.insert(emailQueue).values(queueItems)
 
-      // Update campaign sends to 'queued' status
-      for (const item of queueItems) {
-        await db
+        // Update campaign sends to 'queued' status - batch update using inArray
+        const sendIds = queueItems.map(item => item.campaignSendId)
+        await tx
           .update(campaignSends)
           .set({ status: 'queued', updatedAt: now })
-          .where(eq(campaignSends.id, item.campaignSendId))
+          .where(inArray(campaignSends.id, sendIds))
       }
-    }
 
-    // Update campaign status
-    const [updatedCampaign] = await db
-      .update(campaigns)
-      .set({
-        status: 'active',
-        sentAt: now,
-        emailAccountId,
-        updatedAt: now,
-      })
-      .where(eq(campaigns.id, campaignId))
-      .returning()
+      // Update campaign status
+      const result = await tx
+        .update(campaigns)
+        .set({
+          status: 'active',
+          sentAt: now,
+          emailAccountId,
+          updatedAt: now,
+        })
+        .where(eq(campaigns.id, campaignId))
+        .returning()
+
+      return result
+    })
 
     return NextResponse.json({
       data: updatedCampaign,
@@ -226,3 +230,5 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

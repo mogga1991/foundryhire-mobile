@@ -13,17 +13,22 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { campaignSends, campaigns, emailQueue, emailSuppressions, candidates } from '@/lib/db/schema'
+import { campaignSends, campaigns, emailQueue, emailSuppressions, candidates, webhookIdempotency } from '@/lib/db/schema'
 import { eq, sql } from 'drizzle-orm'
 import crypto from 'crypto'
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+import { rateLimit, getIpIdentifier } from '@/lib/rate-limit'
+
+const logger = createLogger('email-webhook')
 
 // --- Signature Validation ---
 
 function validateResendWebhook(body: string, headers: Headers): boolean {
-  const secret = process.env.RESEND_WEBHOOK_SECRET
+  const secret = env.RESEND_WEBHOOK_SECRET
   if (!secret) {
-    console.warn('[Email Webhook] RESEND_WEBHOOK_SECRET not set, skipping validation')
-    return process.env.NODE_ENV !== 'production'
+    logger.warn({ message: 'RESEND_WEBHOOK_SECRET not set, skipping validation' })
+    return env.NODE_ENV !== 'production'
   }
 
   // Resend uses Svix for webhooks
@@ -32,7 +37,7 @@ function validateResendWebhook(body: string, headers: Headers): boolean {
   const svixSignature = headers.get('svix-signature')
 
   if (!svixId || !svixTimestamp || !svixSignature) {
-    console.error('[Email Webhook] Missing Svix headers')
+    logger.error({ message: 'Missing Svix headers' })
     return false
   }
 
@@ -40,7 +45,7 @@ function validateResendWebhook(body: string, headers: Headers): boolean {
   const ts = parseInt(svixTimestamp, 10)
   const now = Math.floor(Date.now() / 1000)
   if (Math.abs(now - ts) > 300) {
-    console.error('[Email Webhook] Timestamp too old or in future')
+    logger.error({ message: 'Timestamp too old or in future', timestamp: ts, now })
     return false
   }
 
@@ -65,7 +70,7 @@ function validateResendWebhook(body: string, headers: Headers): boolean {
     }
   }
 
-  console.error('[Email Webhook] Signature mismatch')
+  logger.error({ message: 'Signature mismatch' })
   return false
 }
 
@@ -145,59 +150,95 @@ async function getCandidateEmail(candidateId: string): Promise<string | null> {
   return candidate?.email ?? null
 }
 
+// --- Company Ownership Verification ---
+
+async function verifyCampaignOwnership(
+  campaignId: string,
+  expectedCompanyId: string
+): Promise<boolean> {
+  const [campaign] = await db
+    .select({ companyId: campaigns.companyId })
+    .from(campaigns)
+    .where(eq(campaigns.id, campaignId))
+    .limit(1)
+
+  if (!campaign) {
+    logger.info({ message: 'Campaign not found during ownership verification', campaignId })
+    return false
+  }
+
+  const ownershipValid = campaign.companyId === expectedCompanyId
+  if (!ownershipValid) {
+    logger.info({
+      message: 'Campaign ownership verification failed',
+      campaignId,
+      expectedCompanyId,
+      actualCompanyId: campaign.companyId,
+    })
+  }
+
+  return ownershipValid
+}
+
 // --- Event Handlers ---
 
 async function handleDelivered(campaignSendId: string, campaignId: string, timestamp: Date) {
-  await db
-    .update(campaignSends)
-    .set({ status: 'delivered', sentAt: timestamp, updatedAt: new Date() })
-    .where(eq(campaignSends.id, campaignSendId))
+  await db.transaction(async (tx) => {
+    await tx
+      .update(campaignSends)
+      .set({ status: 'delivered', sentAt: timestamp, updatedAt: new Date() })
+      .where(eq(campaignSends.id, campaignSendId))
 
-  await db
-    .update(campaigns)
-    .set({ totalSent: sql`${campaigns.totalSent} + 1`, updatedAt: new Date() })
-    .where(eq(campaigns.id, campaignId))
+    await tx
+      .update(campaigns)
+      .set({ totalSent: sql`${campaigns.totalSent} + 1`, updatedAt: new Date() })
+      .where(eq(campaigns.id, campaignId))
+  })
 }
 
 async function handleOpened(campaignSendId: string, campaignId: string, timestamp: Date) {
-  // Only count first open
-  const [send] = await db
-    .select({ openedAt: campaignSends.openedAt })
-    .from(campaignSends)
-    .where(eq(campaignSends.id, campaignSendId))
-    .limit(1)
+  await db.transaction(async (tx) => {
+    // Only count first open
+    const [send] = await tx
+      .select({ openedAt: campaignSends.openedAt })
+      .from(campaignSends)
+      .where(eq(campaignSends.id, campaignSendId))
+      .limit(1)
 
-  if (send?.openedAt) return
+    if (send?.openedAt) return
 
-  await db
-    .update(campaignSends)
-    .set({ status: 'opened', openedAt: timestamp, updatedAt: new Date() })
-    .where(eq(campaignSends.id, campaignSendId))
+    await tx
+      .update(campaignSends)
+      .set({ status: 'opened', openedAt: timestamp, updatedAt: new Date() })
+      .where(eq(campaignSends.id, campaignSendId))
 
-  await db
-    .update(campaigns)
-    .set({ totalOpened: sql`${campaigns.totalOpened} + 1`, updatedAt: new Date() })
-    .where(eq(campaigns.id, campaignId))
+    await tx
+      .update(campaigns)
+      .set({ totalOpened: sql`${campaigns.totalOpened} + 1`, updatedAt: new Date() })
+      .where(eq(campaigns.id, campaignId))
+  })
 }
 
 async function handleClicked(campaignSendId: string, campaignId: string, timestamp: Date) {
-  const [send] = await db
-    .select({ clickedAt: campaignSends.clickedAt })
-    .from(campaignSends)
-    .where(eq(campaignSends.id, campaignSendId))
-    .limit(1)
+  await db.transaction(async (tx) => {
+    const [send] = await tx
+      .select({ clickedAt: campaignSends.clickedAt })
+      .from(campaignSends)
+      .where(eq(campaignSends.id, campaignSendId))
+      .limit(1)
 
-  if (send?.clickedAt) return
+    if (send?.clickedAt) return
 
-  await db
-    .update(campaignSends)
-    .set({ status: 'clicked', clickedAt: timestamp, updatedAt: new Date() })
-    .where(eq(campaignSends.id, campaignSendId))
+    await tx
+      .update(campaignSends)
+      .set({ status: 'clicked', clickedAt: timestamp, updatedAt: new Date() })
+      .where(eq(campaignSends.id, campaignSendId))
 
-  await db
-    .update(campaigns)
-    .set({ totalClicked: sql`${campaigns.totalClicked} + 1`, updatedAt: new Date() })
-    .where(eq(campaigns.id, campaignId))
+    await tx
+      .update(campaigns)
+      .set({ totalClicked: sql`${campaigns.totalClicked} + 1`, updatedAt: new Date() })
+      .where(eq(campaigns.id, campaignId))
+  })
 }
 
 async function handleBounced(
@@ -208,34 +249,36 @@ async function handleBounced(
   timestamp: Date,
   bounceMessage?: string
 ) {
-  await db
-    .update(campaignSends)
-    .set({
-      status: 'bounced',
-      bouncedAt: timestamp,
-      errorMessage: bounceMessage || 'Email bounced',
-      updatedAt: new Date(),
-    })
-    .where(eq(campaignSends.id, campaignSendId))
-
-  await db
-    .update(campaigns)
-    .set({ totalBounced: sql`${campaigns.totalBounced} + 1`, updatedAt: new Date() })
-    .where(eq(campaigns.id, campaignId))
-
-  // Add to suppression list
-  const email = await getCandidateEmail(candidateId)
-  if (email) {
-    await db
-      .insert(emailSuppressions)
-      .values({
-        companyId,
-        email: email.toLowerCase(),
-        reason: 'bounce',
-        source: campaignSendId,
+  await db.transaction(async (tx) => {
+    await tx
+      .update(campaignSends)
+      .set({
+        status: 'bounced',
+        bouncedAt: timestamp,
+        errorMessage: bounceMessage || 'Email bounced',
+        updatedAt: new Date(),
       })
-      .onConflictDoNothing()
-  }
+      .where(eq(campaignSends.id, campaignSendId))
+
+    await tx
+      .update(campaigns)
+      .set({ totalBounced: sql`${campaigns.totalBounced} + 1`, updatedAt: new Date() })
+      .where(eq(campaigns.id, campaignId))
+
+    // Add to suppression list
+    const email = await getCandidateEmail(candidateId)
+    if (email) {
+      await tx
+        .insert(emailSuppressions)
+        .values({
+          companyId,
+          email: email.toLowerCase(),
+          reason: 'bounce',
+          source: campaignSendId,
+        })
+        .onConflictDoNothing()
+    }
+  })
 }
 
 async function handleComplained(
@@ -243,24 +286,33 @@ async function handleComplained(
   companyId: string,
   candidateId: string
 ) {
-  // Add to suppression list
-  const email = await getCandidateEmail(candidateId)
-  if (email) {
-    await db
-      .insert(emailSuppressions)
-      .values({
-        companyId,
-        email: email.toLowerCase(),
-        reason: 'complaint',
-        source: campaignSendId,
-      })
-      .onConflictDoNothing()
-  }
+  await db.transaction(async (tx) => {
+    // Add to suppression list
+    const email = await getCandidateEmail(candidateId)
+    if (email) {
+      await tx
+        .insert(emailSuppressions)
+        .values({
+          companyId,
+          email: email.toLowerCase(),
+          reason: 'complaint',
+          source: campaignSendId,
+        })
+        .onConflictDoNothing()
+    }
+  })
 }
 
 // --- Route Handler ---
 
 export async function POST(req: NextRequest) {
+  const rateLimitResult = await rateLimit(req, {
+    limit: 60,
+    window: 60000,
+    identifier: (r) => getIpIdentifier(r),
+  })
+  if (rateLimitResult) return rateLimitResult
+
   const body = await req.text()
 
   if (!validateResendWebhook(body, req.headers)) {
@@ -281,17 +333,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing type or email_id' }, { status: 400 })
   }
 
+  // Check idempotency - skip if already processed
+  const eventId = data.email_id
+  if (eventId) {
+    const [existing] = await db
+      .select({ id: webhookIdempotency.id })
+      .from(webhookIdempotency)
+      .where(eq(webhookIdempotency.eventId, String(eventId)))
+      .limit(1)
+
+    if (existing) {
+      logger.info({ message: 'Skipping duplicate webhook event', eventId, type })
+      return NextResponse.json({ received: true, duplicate: true })
+    }
+  }
+
   // Look up the campaign send via providerMessageId
   const lookup = await findCampaignSendByProviderMessageId(data.email_id)
 
   if (!lookup) {
     // Not a tracked email (could be transactional), acknowledge silently
-    console.log(`[Email Webhook] No campaign send found for email_id: ${data.email_id}`)
+    logger.info({ message: 'No campaign send found for email_id', emailId: data.email_id })
     return NextResponse.json({ received: true })
   }
 
   const { campaignSendId, campaignId, candidateId, companyId } = lookup
   const timestamp = created_at ? new Date(created_at) : new Date()
+
+  // Verify company ownership to prevent cross-company data manipulation
+  const ownershipValid = await verifyCampaignOwnership(campaignId, companyId)
+  if (!ownershipValid) {
+    logger.info({
+      message: 'Webhook rejected: campaign ownership verification failed',
+      campaignId,
+      companyId,
+      eventType: type,
+    })
+    return NextResponse.json({ error: 'Invalid campaign ownership' }, { status: 403 })
+  }
 
   try {
     switch (type) {
@@ -328,15 +407,24 @@ export async function POST(req: NextRequest) {
 
       case 'email.delivery_delayed':
         // Log but don't change status
-        console.log(`[Email Webhook] Delivery delayed for send: ${campaignSendId}`)
+        logger.info({ message: 'Delivery delayed for send', campaignSendId })
         break
     }
 
-    console.log(`[Email Webhook] Processed ${type} for send: ${campaignSendId}`)
+    // Record the event in idempotency table after successful processing
+    if (eventId) {
+      await db.insert(webhookIdempotency).values({
+        eventId: String(eventId),
+        eventType: type,
+        source: 'resend',
+        payload: payload,
+      })
+    }
+
+    logger.info({ message: 'Processed webhook event', eventType: type, campaignSendId })
     return NextResponse.json({ received: true })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    console.error(`[Email Webhook] Error processing ${type}:`, message)
+    logger.error({ message: 'Error processing webhook event', eventType: type, error: err })
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
   }
 }

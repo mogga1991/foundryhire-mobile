@@ -3,6 +3,7 @@ import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { candidates, candidateActivities, candidateReminders } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 export async function GET(
   request: NextRequest,
@@ -24,6 +25,9 @@ export async function GET(
 
     return NextResponse.json({ candidate: data })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -35,7 +39,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
+async function _PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -96,6 +100,9 @@ export async function PATCH(
 
     return NextResponse.json({ candidate: data })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -107,7 +114,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function _DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -125,13 +132,18 @@ export async function DELETE(
       return NextResponse.json({ error: 'Candidate not found' }, { status: 404 })
     }
 
-    // Delete related records first
-    await db.delete(candidateActivities).where(eq(candidateActivities.candidateId, id))
-    await db.delete(candidateReminders).where(eq(candidateReminders.candidateId, id))
-    await db.delete(candidates).where(and(eq(candidates.id, id), eq(candidates.companyId, companyId)))
+    // Delete all related records atomically in a transaction
+    await db.transaction(async (tx) => {
+      await tx.delete(candidateActivities).where(eq(candidateActivities.candidateId, id))
+      await tx.delete(candidateReminders).where(eq(candidateReminders.candidateId, id))
+      await tx.delete(candidates).where(and(eq(candidates.id, id), eq(candidates.companyId, companyId)))
+    })
 
     return NextResponse.json({ message: 'Candidate deleted successfully' })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -142,3 +154,6 @@ export async function DELETE(
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const PATCH = withApiMiddleware(_PATCH, { csrfProtection: true })
+export const DELETE = withApiMiddleware(_DELETE, { csrfProtection: true })

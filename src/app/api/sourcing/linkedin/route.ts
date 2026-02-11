@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 import { requireAuth } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { jobs } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
+
+const logger = createLogger('api:sourcing:linkedin')
 
 const MOCK_CONSTRUCTION_CANDIDATES = [
   {
@@ -167,7 +171,7 @@ const MOCK_CONSTRUCTION_CANDIDATES = [
   },
 ]
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     await requireAuth()
 
@@ -221,11 +225,16 @@ export async function POST(request: NextRequest) {
       location: location || null,
     })
   } catch (err) {
+    if (err instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (err instanceof Error && err.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const message = err instanceof Error ? err.message : 'Sourcing failed'
-    console.error('LinkedIn sourcing error:', message)
+    logger.error({ message: 'LinkedIn sourcing error', error: message })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

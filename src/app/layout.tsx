@@ -16,6 +16,9 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || 'https://verticalhire.com'
+  ),
   title: 'VerticalHire - AI-Powered Construction Recruiting',
   description:
     'Hire construction executives without recruiters. VerticalHire uses AI to source, score, and engage top construction talent automatically.',

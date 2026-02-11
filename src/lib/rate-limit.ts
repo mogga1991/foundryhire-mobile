@@ -2,6 +2,7 @@ import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { NextRequest, NextResponse } from 'next/server'
 import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
 
 const logger = createLogger('rate-limit')
 
@@ -39,11 +40,11 @@ class InMemoryRateLimiter {
 // Initialize rate limiter based on environment
 let rateLimiter: Ratelimit | InMemoryRateLimiter
 
-if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+if (env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
   // Production: Use Upstash Redis
   const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    url: env.UPSTASH_REDIS_REST_URL,
+    token: env.UPSTASH_REDIS_REST_TOKEN,
   })
 
   rateLimiter = new Ratelimit({

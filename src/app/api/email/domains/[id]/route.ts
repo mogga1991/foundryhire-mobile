@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { domainIdentities } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { ResendProvider } from '@/lib/email/providers/resend-provider'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 export async function GET(
   _request: NextRequest,
@@ -33,7 +34,7 @@ export async function GET(
   }
 }
 
-export async function DELETE(
+async function _DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -74,3 +75,5 @@ export async function DELETE(
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const DELETE = withApiMiddleware(_DELETE, { csrfProtection: true })

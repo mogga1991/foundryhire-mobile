@@ -24,7 +24,9 @@ export function useUser(): UseUserReturn {
           setUser(null)
         }
       } catch (err) {
-        console.error('Failed to fetch session:', err)
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('Failed to fetch session:', err)
+        }
         setError('Failed to fetch user session')
         setUser(null)
       } finally {

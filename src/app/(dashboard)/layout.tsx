@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Navbar } from '@/components/layout/navbar'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
 
 export default async function DashboardLayout({
   children,
@@ -36,6 +37,9 @@ export default async function DashboardLayout({
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile navbar */}
         <Navbar user={sidebarUser} companyName={companyName} />
+
+        {/* Desktop header with notifications */}
+        <DashboardHeader />
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">{children}</main>

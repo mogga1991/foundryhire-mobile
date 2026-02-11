@@ -34,6 +34,8 @@ interface EmailEditorProps {
   emailAccountId?: string | null
   onEmailAccountChange?: (accountId: string) => void
   showEmailAccountSelector?: boolean
+  subjectError?: string
+  bodyError?: string
 }
 
 const typeLabels: Record<string, string> = {
@@ -54,6 +56,8 @@ export function EmailEditor({
   emailAccountId,
   onEmailAccountChange,
   showEmailAccountSelector = false,
+  subjectError,
+  bodyError,
 }: EmailEditorProps) {
   const [isPreview, setIsPreview] = useState(false)
   const { data: emailAccounts, loading: accountsLoading } = useEmailAccounts()
@@ -171,18 +175,30 @@ export function EmailEditor({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="email-subject">Subject Line</Label>
+            <Label htmlFor="email-subject">
+              Subject Line <span className="text-destructive" aria-label="required">*</span>
+            </Label>
             <Input
               id="email-subject"
               placeholder="Enter email subject..."
               value={subject}
               onChange={(e) => onSubjectChange(e.target.value)}
+              aria-required="true"
+              aria-invalid={subjectError ? 'true' : 'false'}
+              aria-describedby={subjectError ? 'email-subject-error' : undefined}
             />
+            {subjectError && (
+              <p id="email-subject-error" className="text-xs text-destructive" role="alert">
+                {subjectError}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="email-body">Email Body</Label>
+              <Label htmlFor="email-body">
+                Email Body <span className="text-destructive" aria-label="required">*</span>
+              </Label>
               <span className="text-xs text-muted-foreground">{bodyCharCount} characters</span>
             </div>
             <Textarea
@@ -191,7 +207,15 @@ export function EmailEditor({
               value={body}
               onChange={(e) => onBodyChange(e.target.value)}
               className="min-h-[200px]"
+              aria-required="true"
+              aria-invalid={bodyError ? 'true' : 'false'}
+              aria-describedby={bodyError ? 'email-body-error' : undefined}
             />
+            {bodyError && (
+              <p id="email-body-error" className="text-xs text-destructive" role="alert">
+                {bodyError}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

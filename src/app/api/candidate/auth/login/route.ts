@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm'
 import { createLogger } from '@/lib/logger'
 import { rateLimit, RateLimitPresets } from '@/lib/rate-limit'
 import { SignJWT } from 'jose'
+import { env } from '@/lib/env'
 
 const logger = createLogger('candidate-auth-login')
 
@@ -15,10 +16,8 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 })
 
-// Get JWT secret
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.ENCRYPTION_KEY || 'fallback-secret-key'
-)
+// Get JWT secret from validated env
+const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET)
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,7 +37,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
 
     if (!user) {
-      logger.warn({ email: validatedData.email }, 'Login attempt with non-existent email')
+      logger.warn({ message: 'Login attempt with non-existent email', email: validatedData.email })
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
@@ -48,7 +47,7 @@ export async function POST(req: NextRequest) {
     // Verify password
     const isValidPassword = await bcrypt.compare(validatedData.password, user.passwordHash)
     if (!isValidPassword) {
-      logger.warn({ candidateId: user.id, email: user.email }, 'Login attempt with invalid password')
+      logger.warn({ message: 'Login attempt with invalid password', candidateId: user.id, email: user.email })
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
@@ -71,7 +70,7 @@ export async function POST(req: NextRequest) {
       .setExpirationTime('7d') // 7 days
       .sign(JWT_SECRET)
 
-    logger.info({ candidateId: user.id, email: user.email }, 'Candidate logged in successfully')
+    logger.info({ message: 'Candidate logged in successfully', candidateId: user.id, email: user.email })
 
     // Create response with session cookie
     const response = NextResponse.json({
@@ -88,7 +87,7 @@ export async function POST(req: NextRequest) {
     // Set httpOnly cookie
     response.cookies.set('candidate_session_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: '/',
@@ -97,6 +96,9 @@ export async function POST(req: NextRequest) {
     return response
 
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.issues },
@@ -104,7 +106,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    logger.error({ error }, 'Candidate login failed')
+    logger.error({ message: 'Candidate login failed', error })
     return NextResponse.json(
       { error: 'Server error. Please try again or contact support.' },
       { status: 500 }

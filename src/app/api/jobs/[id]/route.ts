@@ -4,10 +4,11 @@ import { db } from '@/lib/db'
 import { jobs, candidates } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 const logger = createLogger('api:jobs:delete')
 
-export async function DELETE(
+async function _DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -64,3 +65,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'Internal server error', data: null }, { status: 500 })
   }
 }
+
+export const DELETE = withApiMiddleware(_DELETE, { csrfProtection: true })

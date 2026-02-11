@@ -8,7 +8,7 @@
 
 import { db } from '@/lib/db'
 import { campaigns, campaignFollowUps, campaignSends, candidates, emailAccounts, emailQueue, emailSuppressions } from '@/lib/db/schema'
-import { eq, and, isNull, notInArray, lte, sql } from 'drizzle-orm'
+import { eq, and, isNull, lte, sql } from 'drizzle-orm'
 import { renderTemplate } from '@/lib/email/template'
 
 /**

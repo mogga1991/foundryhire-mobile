@@ -134,7 +134,9 @@ export default function CompanySettingsPage() {
         setTeamMembers(data.companyUsers)
       }
     } catch (err) {
-      console.error('Error loading company data:', err)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Error loading company data:', err)
+      }
       toast.error('Failed to load company settings')
     } finally {
       setLoading(false)
@@ -162,7 +164,9 @@ export default function CompanySettingsPage() {
       if (!res.ok) {
         const data = await res.json()
         toast.error(data.error ?? 'Failed to save company settings')
-        console.error('Error saving company:', data.error)
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('Error saving company:', data.error)
+        }
       } else {
         const data = await res.json()
         if (isCreating && data.companyId) {
@@ -171,7 +175,9 @@ export default function CompanySettingsPage() {
         toast.success(isCreating ? 'Company created successfully' : 'Company settings saved successfully')
       }
     } catch (err) {
-      console.error('Error saving company:', err)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Error saving company:', err)
+      }
       toast.error('An unexpected error occurred')
     } finally {
       setSaving(false)
@@ -199,7 +205,9 @@ export default function CompanySettingsPage() {
       inviteForm.reset({ email: '', role: 'recruiter' })
       setInviteDialogOpen(false)
     } catch (err) {
-      console.error('Error sending invite:', err)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Error sending invite:', err)
+      }
       toast.error('Team invitations are not yet available. This feature is coming soon.')
     } finally {
       setInviting(false)

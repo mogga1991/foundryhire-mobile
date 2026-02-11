@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { jobs } from '@/lib/db/schema'
-import { eq, and, count, desc, asc, sql } from 'drizzle-orm'
+import { eq, and, count, desc, asc } from 'drizzle-orm'
 import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 const logger = createLogger('api:jobs')
 
@@ -72,6 +73,9 @@ export async function GET(request: NextRequest) {
       total_pages: total ? Math.ceil(total / perPage) : 0,
     })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 })
     }
@@ -83,7 +87,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function PATCH(request: NextRequest) {
+async function _PATCH(request: NextRequest) {
   try {
     const { companyId } = await requireCompanyAccess()
 
@@ -153,6 +157,9 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ data: updated, error: null })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 })
     }
@@ -164,7 +171,9 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export const PATCH = withApiMiddleware(_PATCH, { csrfProtection: true })
+
+async function _POST(request: NextRequest) {
   try {
     const { user, companyId } = await requireCompanyAccess()
 
@@ -217,6 +226,9 @@ export async function POST(request: NextRequest) {
       leadGenerationStatus,
     }, { status: 201 })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 })
     }
@@ -227,3 +239,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', data: null }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

@@ -8,6 +8,27 @@
       "when": 1770528707172,
       "tag": "0000_flowery_scalphunter",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770528707173,
+      "tag": "0001_add_linkedin_profile_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770528707174,
+      "tag": "0002_add_interview_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1770817453708,
+      "tag": "0003_harsh_sharon_ventura",
+      "breakpoints": true
     }
   ]
 }

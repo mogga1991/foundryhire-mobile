@@ -2,7 +2,7 @@
 
 import { useState, useCallback, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
+import { useForm, type Resolver } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
@@ -167,9 +167,8 @@ export function JobForm({ jobId, initialData, aiAssisted, confidenceScores, auto
   const isSubmitting = isCreating || isUpdating || isGeneratingLeads
   const isEditMode = !!jobId
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const form = useForm<JobFormValues>({
-    resolver: zodResolver(jobFormSchema) as any,
+    resolver: zodResolver(jobFormSchema) as Resolver<JobFormValues>,
     defaultValues: {
       title: initialData?.title ?? '',
       location: initialData?.location ?? '',
@@ -263,19 +262,63 @@ export function JobForm({ jobId, initialData, aiAssisted, confidenceScores, auto
       })
 
       if (!response.ok) {
-        throw new Error('Failed to generate description')
+        let errorMessage = 'Failed to generate description'
+        try {
+          const errorData = (await response.json()) as { error?: string }
+          if (errorData.error) {
+            errorMessage = errorData.error
+          }
+        } catch {
+          // Ignore body parse failures and keep fallback message.
+        }
+        throw new Error(errorMessage)
       }
 
-      const data = await response.json()
+      const data = (await response.json()) as {
+        success?: boolean
+        description?: string
+        source?: 'ai' | 'template'
+      }
 
       if (data.success && data.description) {
         form.setValue('description', data.description, { shouldValidate: true })
+        if (data.source === 'template') {
+          toast.info('AI service unavailable. Added a smart starter description instead.')
+        } else {
+          toast.success('Job description generated')
+        }
+      } else {
+        throw new Error('Failed to generate description')
       }
     } catch (error) {
-      console.error('Failed to generate job description:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to generate job description:', error)
+      }
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to generate description'
+      )
     } finally {
       setIsGenerating(false)
     }
+  }
+
+  const getCsrfToken = async (): Promise<string> => {
+    const csrfRes = await fetch('/api/csrf', {
+      method: 'GET',
+      cache: 'no-store',
+      credentials: 'include',
+    })
+
+    if (!csrfRes.ok) {
+      throw new Error('Failed to initialize secure request')
+    }
+
+    const csrfData = (await csrfRes.json()) as { token?: string }
+    if (!csrfData.token) {
+      throw new Error('Missing CSRF token')
+    }
+
+    return csrfData.token
   }
 
   const handleSubmit = async (status: 'draft' | 'active') => {
@@ -325,9 +368,13 @@ export function JobForm({ jobId, initialData, aiAssisted, confidenceScores, auto
           })
 
           try {
+            const csrfToken = await getCsrfToken()
             const leadResponse = await fetch('/api/leads/generate', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'x-csrf-token': csrfToken,
+              },
               body: JSON.stringify({
                 jobId: newJob.id,
                 jobTitle: values.title,
@@ -337,22 +384,44 @@ export function JobForm({ jobId, initialData, aiAssisted, confidenceScores, auto
             })
 
             if (!leadResponse.ok) {
-              const errorText = await leadResponse.text()
-              console.error('Lead generation failed:', errorText)
+              let apiError = 'Failed to generate leads'
+              try {
+                const errorData = (await leadResponse.json()) as { error?: string; message?: string }
+                apiError = errorData.error || errorData.message || apiError
+              } catch {
+                // Ignore parse failures and keep default error message.
+              }
+
+              if (process.env.NODE_ENV !== 'production') {
+                console.error('Lead generation failed:', apiError)
+              }
+
+              const isCsrfError =
+                apiError === 'Invalid CSRF token' || apiError === 'CSRF token missing'
+              const isAuthError = apiError === 'Unauthorized' || leadResponse.status === 401
+
               toast.error('Failed to generate leads', {
-                description: 'You can manually generate leads later from the job page.',
+                description: isCsrfError
+                  ? 'Your secure session expired. Refresh the page and try generating leads again.'
+                  : isAuthError
+                    ? 'Your session expired. Sign in again, then retry lead generation.'
+                    : 'You can manually generate leads later from the job page.',
                 id: 'lead-generation',
               })
             } else {
               const leadResult = await leadResponse.json()
-              console.log('Lead generation successful:', leadResult.stats)
+              if (process.env.NODE_ENV !== 'production') {
+                console.log('Lead generation successful:', leadResult.stats)
+              }
               toast.success(`Generated ${leadResult.stats.totalLeads} qualified leads`, {
                 description: `${leadResult.stats.emailsFound} emails found, ${leadResult.stats.phonesFound} phones found`,
                 id: 'lead-generation',
               })
             }
           } catch (error) {
-            console.error('Error generating leads:', error)
+            if (process.env.NODE_ENV !== 'production') {
+              console.error('Error generating leads:', error)
+            }
             toast.error('Failed to generate leads', {
               description: 'You can manually generate leads later from the job page.',
               id: 'lead-generation',

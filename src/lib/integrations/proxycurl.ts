@@ -13,7 +13,11 @@
  * - Contact information lookup
  */
 
-const PROXYCURL_API_KEY = process.env.PROXYCURL_API_KEY || ''
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('integration:proxycurl')
+const PROXYCURL_API_KEY = env.PROXYCURL_API_KEY || ''
 const PROXYCURL_BASE_URL = 'https://nubela.co/proxycurl/api/v2'
 
 // =============================================================================
@@ -81,7 +85,7 @@ export async function getLinkedInProfile(
   includeContactInfo: boolean = true
 ): Promise<ProxycurlPersonProfile | null> {
   if (!PROXYCURL_API_KEY) {
-    console.warn('[Proxycurl] API key not configured')
+    logger.warn({ message: 'API key not configured' })
     return null
   }
 
@@ -110,7 +114,7 @@ export async function getLinkedInProfile(
 
     return await response.json()
   } catch (error) {
-    console.error('[Proxycurl] Profile enrichment error:', error)
+    logger.error({ message: 'Profile enrichment error', error })
     return null
   }
 }
@@ -127,7 +131,7 @@ export async function searchCompanyEmployees(
   params: EmployeeSearchParams
 ): Promise<ProxycurlPersonProfile[]> {
   if (!PROXYCURL_API_KEY) {
-    console.warn('[Proxycurl] API key not configured')
+    logger.warn({ message: 'API key not configured' })
     return []
   }
 
@@ -162,7 +166,7 @@ export async function searchCompanyEmployees(
     const data = await response.json()
     return data.employees || []
   } catch (error) {
-    console.error('[Proxycurl] Employee search error:', error)
+    logger.error({ message: 'Employee search error', error })
     return []
   }
 }
@@ -243,7 +247,7 @@ export async function findLinkedInFromEmail(
     const data = await response.json()
     return data.url || null
   } catch (error) {
-    console.error('[Proxycurl] Reverse email lookup error:', error)
+    logger.error({ message: 'Reverse email lookup error', error })
     return null
   }
 }
@@ -278,7 +282,7 @@ async function resolveCompanyLinkedInUrl(companyName: string): Promise<string | 
     const data = await response.json()
     return data.url || null
   } catch (error) {
-    console.error('[Proxycurl] Company resolve error:', error)
+    logger.error({ message: 'Company resolve error', error })
     return null
   }
 }
@@ -310,7 +314,7 @@ export async function getCompanyEmployeeCount(
     const data = await response.json()
     return data.employee_count || null
   } catch (error) {
-    console.error('[Proxycurl] Employee count error:', error)
+    logger.error({ message: 'Employee count error', error })
     return null
   }
 }

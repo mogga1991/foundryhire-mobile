@@ -223,27 +223,41 @@ export function ScheduleInterviewModal({
 
             {interviewType === 'phone' && (
               <div className="space-y-2">
-                <Label htmlFor="phone-number">Phone Number</Label>
+                <Label htmlFor="phone-number">
+                  Phone Number <span className="text-destructive" aria-label="required">*</span>
+                </Label>
                 <Input
                   id="phone-number"
                   type="tel"
                   placeholder="Enter phone number for the call"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
+                  aria-required="true"
+                  aria-invalid={interviewType === 'phone' && !phoneNumber ? 'true' : 'false'}
                 />
+                {interviewType === 'phone' && !phoneNumber && (
+                  <p className="text-xs text-muted-foreground">Phone number is required for phone interviews</p>
+                )}
               </div>
             )}
 
             {interviewType === 'in_person' && (
               <div className="space-y-2">
-                <Label htmlFor="location">Location</Label>
+                <Label htmlFor="location">
+                  Location <span className="text-destructive" aria-label="required">*</span>
+                </Label>
                 <Input
                   id="location"
                   type="text"
                   placeholder="Enter meeting location/address"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
+                  aria-required="true"
+                  aria-invalid={interviewType === 'in_person' && !location ? 'true' : 'false'}
                 />
+                {interviewType === 'in_person' && !location && (
+                  <p className="text-xs text-muted-foreground">Location is required for in-person interviews</p>
+                )}
               </div>
             )}
 
@@ -369,23 +383,37 @@ export function ScheduleInterviewModal({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="custom-date">Date</Label>
+                <Label htmlFor="custom-date">
+                  Date <span className="text-destructive" aria-label="required">*</span>
+                </Label>
                 <Input
                   id="custom-date"
                   type="date"
                   value={customDate}
                   onChange={(e) => setCustomDate(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
+                  aria-required="true"
+                  aria-invalid={!customDate ? 'true' : 'false'}
                 />
+                {!customDate && (
+                  <p className="text-xs text-muted-foreground">Please select a date</p>
+                )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="custom-time">Time</Label>
+                <Label htmlFor="custom-time">
+                  Time <span className="text-destructive" aria-label="required">*</span>
+                </Label>
                 <Input
                   id="custom-time"
                   type="time"
                   value={customTime}
                   onChange={(e) => setCustomTime(e.target.value)}
+                  aria-required="true"
+                  aria-invalid={!customTime ? 'true' : 'false'}
                 />
+                {!customTime && (
+                  <p className="text-xs text-muted-foreground">Please select a time</p>
+                )}
               </div>
             </div>
 

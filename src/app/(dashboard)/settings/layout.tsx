@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { Building2, CreditCard, User, Mail } from 'lucide-react'
+import { Building2, CreditCard, User, Mail, Users } from 'lucide-react'
 
 const settingsNav = [
   {
@@ -17,6 +17,12 @@ const settingsNav = [
     href: '/settings/company',
     icon: Building2,
     description: 'Company profile and team management',
+  },
+  {
+    title: 'Team',
+    href: '/settings/team',
+    icon: Users,
+    description: 'Team members and role management',
   },
   {
     title: 'Email',

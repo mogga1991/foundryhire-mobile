@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
 import { db } from '@/lib/db'
 import { campaignSends, campaigns } from '@/lib/db/schema'
 import { eq, sql } from 'drizzle-orm'
+import { rateLimit, getIpIdentifier } from '@/lib/rate-limit'
+
+const logger = createLogger('api:track:click')
 
 async function updateClickEvent(campaignSendId: string) {
   try {
@@ -23,11 +28,29 @@ async function updateClickEvent(campaignSendId: string) {
       .set({ totalClicked: sql`${campaigns.totalClicked} + 1`, updatedAt: new Date() })
       .where(eq(campaigns.id, send.campaignId))
   } catch (error) {
-    console.error('[Track Click] Error:', error)
+    logger.error({ message: 'Track click event failed', error })
   }
 }
 
+// Intentionally public endpoint (email tracking link redirect)
+// Rate limited to prevent abuse
 export async function GET(request: NextRequest) {
+  // Rate limit: 100 clicks per minute per IP to prevent abuse
+  const rateLimitResult = await rateLimit(request, {
+    limit: 100,
+    window: 60000,
+    identifier: (req) => `track-click:${getIpIdentifier(req)}`,
+  })
+
+  if (rateLimitResult) {
+    // On rate limit, still redirect but don't track
+    const url = request.nextUrl.searchParams.get('url')
+    if (url) {
+      return NextResponse.redirect(decodeURIComponent(url))
+    }
+    return NextResponse.redirect(env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
+  }
+
   const sid = request.nextUrl.searchParams.get('sid')
   const url = request.nextUrl.searchParams.get('url')
 
@@ -36,7 +59,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (!url) {
-    return NextResponse.redirect(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
+    return NextResponse.redirect(env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
   }
 
   return NextResponse.redirect(decodeURIComponent(url))

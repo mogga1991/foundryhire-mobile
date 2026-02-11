@@ -103,7 +103,9 @@ export function SignupForm() {
 
       router.push('/dashboard')
     } catch (err) {
-      console.error('[Signup Error]', err)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[Signup Error]', err)
+      }
       toast.error('Sign up failed', {
         description: 'An unexpected error occurred. Please try again.',
       })

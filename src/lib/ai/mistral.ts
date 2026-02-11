@@ -5,8 +5,9 @@
  */
 
 import { Mistral } from '@mistralai/mistralai'
+import { env } from '@/lib/env'
 
-const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY || ''
+const MISTRAL_API_KEY = env.MISTRAL_API_KEY || ''
 
 const mistral = new Mistral({
   apiKey: MISTRAL_API_KEY,

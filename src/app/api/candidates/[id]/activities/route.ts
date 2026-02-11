@@ -3,6 +3,7 @@ import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { candidateActivities, candidates } from '@/lib/db/schema'
 import { eq, and, desc } from 'drizzle-orm'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 export async function GET(
   request: NextRequest,
@@ -31,6 +32,9 @@ export async function GET(
 
     return NextResponse.json({ activities })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -41,7 +45,7 @@ export async function GET(
   }
 }
 
-export async function POST(
+async function _POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -76,6 +80,9 @@ export async function POST(
 
     return NextResponse.json({ activity })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -85,3 +92,5 @@ export async function POST(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

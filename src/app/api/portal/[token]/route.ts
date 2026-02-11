@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createLogger } from '@/lib/logger'
 import { db } from '@/lib/db'
 import { interviews, candidates, jobs, companies } from '@/lib/db/schema'
 import { eq, and, gt } from 'drizzle-orm'
+
+const logger = createLogger('api:portal')
 
 // GET /api/portal/[token] - Fetch interview details for candidate portal (public, no auth required)
 export async function GET(
@@ -83,7 +86,7 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error('Error fetching portal data:', error)
+    logger.error({ message: 'Error fetching portal data', error })
     return NextResponse.json(
       { error: 'Failed to load interview details' },
       { status: 500 }

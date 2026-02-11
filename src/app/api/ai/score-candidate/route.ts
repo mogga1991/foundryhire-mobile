@@ -12,10 +12,11 @@ import {
 } from '@/lib/ai/prompts/candidate-scoring'
 import { rateLimit, RateLimitPresets, getEndpointIdentifier } from '@/lib/rate-limit'
 import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 const logger = createLogger('api:ai:score-candidate')
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   // Apply AI-specific rate limiting (more restrictive for expensive operations)
   const rateLimitResult = await rateLimit(request, {
     ...RateLimitPresets.ai,
@@ -79,6 +80,9 @@ export async function POST(request: NextRequest) {
       success: true,
     })
   } catch (err) {
+    if (err instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (err instanceof Error && err.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -90,3 +94,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message, success: false }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

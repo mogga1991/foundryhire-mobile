@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createLogger } from '@/lib/logger'
 import { requireAuth } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { companies, companyUsers, subscriptions, users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
-export async function POST(request: NextRequest) {
+const logger = createLogger('api:onboarding')
+import { rateLimit, RateLimitPresets, getIpIdentifier } from '@/lib/rate-limit'
+
+async function _POST(request: NextRequest) {
   try {
+    const rateLimitResult = await rateLimit(request, {
+      ...RateLimitPresets.standard,
+      identifier: (req) => getIpIdentifier(req),
+    })
+    if (rateLimitResult) return rateLimitResult
+
     const authUser = await requireAuth()
 
     const body = await request.json()
@@ -68,11 +79,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, companyId: company.id })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    console.error('POST /api/onboarding error:', error)
+    logger.error({ message: 'Failed to complete onboarding', error })
     const message = error instanceof Error ? error.message : 'Internal server error'
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

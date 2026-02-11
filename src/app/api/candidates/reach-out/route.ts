@@ -5,6 +5,7 @@ import { candidateReachOuts, candidateUsers, companyUsers } from '@/lib/db/schem
 import { eq } from 'drizzle-orm'
 import { getSession } from '@/lib/auth'
 import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 const logger = createLogger('candidate-reach-out')
 
@@ -13,7 +14,7 @@ const reachOutSchema = z.object({
   message: z.string().min(10, 'Message must be at least 10 characters').max(1000, 'Message must be less than 1000 characters'),
 })
 
-export async function POST(req: NextRequest) {
+async function _POST(req: NextRequest) {
   try {
     // Get employer session
     const session = await getSession()
@@ -60,17 +61,58 @@ export async function POST(req: NextRequest) {
       })
       .returning()
 
-    logger.info(
-      {
-        reachOutId: reachOut.id,
-        candidateId: validatedData.candidateId,
-        employerId,
-      },
-      'Employer reached out to candidate'
-    )
+    logger.info({
+      message: 'Employer reached out to candidate',
+      reachOutId: reachOut.id,
+      candidateId: validatedData.candidateId,
+      employerId,
+    })
 
-    // TODO: Send email notification to candidate
-    // TODO: Create in-app notification for candidate
+    // Send in-app notification to candidate (non-blocking)
+    const { notifyCandidateReachOut } = await import('@/lib/services/notifications')
+    notifyCandidateReachOut(
+      validatedData.candidateId,
+      employerId,
+      employerCompany?.companyId || '',
+      reachOut.id
+    ).catch((err) => {
+      logger.error({ message: 'Failed to send reach-out notification', error: err })
+    })
+
+    // Send email notification to candidate (non-blocking)
+    const { sendReachOutNotification } = await import('@/lib/email/reach-out-notification')
+    const { companies, users } = await import('@/lib/db/schema')
+
+    // Fetch employer and company details for the email
+    const [employer] = await db.select({ name: users.name, email: users.email })
+      .from(users)
+      .where(eq(users.id, employerId))
+      .limit(1)
+
+    const employerName = employer?.name || employer?.email || 'An employer'
+
+    let companyName = 'a company'
+    if (employerCompany?.companyId) {
+      const [company] = await db.select({ name: companies.name })
+        .from(companies)
+        .where(eq(companies.id, employerCompany.companyId))
+        .limit(1)
+      companyName = company?.name || 'a company'
+    }
+
+    // Construct portal URL - this should be the candidate portal URL
+    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/candidate/reach-outs/${reachOut.id}`
+
+    sendReachOutNotification({
+      candidateEmail: candidate.email,
+      candidateName: `${candidate.firstName} ${candidate.lastName}`,
+      employerName,
+      companyName,
+      message: validatedData.message,
+      portalUrl,
+    }).catch((err) => {
+      logger.error({ message: 'Failed to send reach-out email', error: err })
+    })
 
     return NextResponse.json({
       success: true,
@@ -78,6 +120,9 @@ export async function POST(req: NextRequest) {
       message: 'Message sent successfully',
     })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.issues },
@@ -92,3 +137,5 @@ export async function POST(req: NextRequest) {
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

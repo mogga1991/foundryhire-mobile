@@ -15,6 +15,25 @@ interface UseJobsReturn {
   refetch: () => Promise<void>
 }
 
+async function getCsrfToken(): Promise<string> {
+  const csrfRes = await fetch('/api/csrf', {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'include',
+  })
+
+  if (!csrfRes.ok) {
+    throw new Error('Failed to initialize secure request')
+  }
+
+  const csrfData = (await csrfRes.json()) as { token?: string }
+  if (!csrfData.token) {
+    throw new Error('Missing CSRF token')
+  }
+
+  return csrfData.token
+}
+
 export function useJobs(options: UseJobsOptions = {}): UseJobsReturn {
   const [data, setData] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
@@ -113,9 +132,13 @@ export function useCreateJob(): UseCreateJobReturn {
     setError(null)
 
     try {
+      const csrfToken = await getCsrfToken()
       const res = await fetch('/api/jobs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken,
+        },
         body: JSON.stringify(job),
       })
 
@@ -154,9 +177,13 @@ export function useUpdateJob(): UseUpdateJobReturn {
     setError(null)
 
     try {
+      const csrfToken = await getCsrfToken()
       const res = await fetch(`/api/jobs?id=${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken,
+        },
         body: JSON.stringify(updates),
       })
 

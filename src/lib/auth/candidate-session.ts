@@ -1,9 +1,11 @@
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
+import { createLogger } from '@/lib/logger'
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.ENCRYPTION_KEY || 'fallback-secret-key'
-)
+const logger = createLogger('lib:auth:candidate-session')
+import { env } from '@/lib/env'
+
+const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET)
 
 export interface CandidateSession {
   candidateId: string
@@ -35,7 +37,7 @@ export async function getCandidateSession(): Promise<CandidateSession | null> {
       type: 'candidate',
     }
   } catch (error) {
-    console.error('Failed to verify candidate session:', error)
+    logger.error({ message: 'Failed to verify candidate session', error })
     return null
   }
 }

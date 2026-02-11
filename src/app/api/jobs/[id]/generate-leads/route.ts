@@ -11,10 +11,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { triggerLeadGenerationForJob, canGenerateLeadsForJob } from '@/lib/jobs/auto-lead-generation'
 
-export async function POST(
+const logger = createLogger('api:jobs:generate-leads')
+
+async function _POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -36,11 +40,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}))
     const maxLeads = body.maxLeads || 20
 
-    console.log('[Generate Leads API] Request:', {
-      jobId,
-      companyId,
-      maxLeads,
-    })
+    logger.info({ message: 'Generate leads request', jobId, companyId, maxLeads })
 
     // =============================================================================
     // Validate that lead generation can be run for this job
@@ -64,7 +64,7 @@ export async function POST(
 
     const stats = await triggerLeadGenerationForJob(jobId, companyId, maxLeads)
 
-    console.log('[Generate Leads API] Success:', stats)
+    logger.info({ message: 'Generate leads succeeded', stats })
 
     return NextResponse.json({
       success: true,
@@ -83,6 +83,9 @@ export async function POST(
       },
     })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -90,7 +93,7 @@ export async function POST(
       return NextResponse.json({ error: 'Company not found' }, { status: 404 })
     }
 
-    console.error('[Generate Leads API] Error:', error)
+    logger.error({ message: 'Generate leads failed', error })
 
     return NextResponse.json(
       {
@@ -101,3 +104,5 @@ export async function POST(
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

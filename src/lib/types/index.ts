@@ -15,6 +15,7 @@ import type {
   emailQueue,
   emailSuppressions,
   campaignFollowUps,
+  campaignTemplates,
 } from '@/lib/db/schema'
 
 // Company types
@@ -83,3 +84,7 @@ export type EmailSuppression = InferSelectModel<typeof emailSuppressions>
 // Campaign Follow-Up types
 export type CampaignFollowUp = InferSelectModel<typeof campaignFollowUps>
 export type CampaignFollowUpInsert = InferInsertModel<typeof campaignFollowUps>
+
+// Campaign Template types
+export type CampaignTemplate = InferSelectModel<typeof campaignTemplates>
+export type CampaignTemplateInsert = InferInsertModel<typeof campaignTemplates>

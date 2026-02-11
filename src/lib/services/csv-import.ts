@@ -19,6 +19,9 @@ import {
   type CandidateInput,
   type MergeStrategy,
 } from './deduplication'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('service:csv-import')
 
 // =============================================================================
 // Types
@@ -290,7 +293,7 @@ export async function importCsvCandidates(
       result.duplicatesSkipped += stats.skipped
     } catch (error) {
       // Log error but continue with next chunk
-      console.error(`[CSV Import] Error processing chunk ${i / CHUNK_SIZE + 1}:`, error)
+      logger.error({ message: 'Error processing chunk', chunkNumber: i / CHUNK_SIZE + 1, error })
       result.errors.push({
         row: i + 1,
         error: `Chunk processing failed: ${error instanceof Error ? error.message : 'unknown'}`,

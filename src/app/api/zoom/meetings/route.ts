@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { getSession } from '@/lib/auth'
 import { createZoomMeeting } from '@/lib/integrations/zoom'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('api:zoom:meetings')
 
 /**
  * POST /api/zoom/meetings
@@ -22,7 +27,15 @@ import { createZoomMeeting } from '@/lib/integrations/zoom'
  *   password: string
  * }
  */
-export async function POST(request: NextRequest) {
+const createZoomMeetingRequestSchema = z.object({
+  topic: z.string().min(1),
+  startTime: z.string().min(1),
+  durationMinutes: z.number().int().min(1),
+  timezone: z.string().optional(),
+  agenda: z.string().optional(),
+})
+
+async function _POST(request: NextRequest) {
   try {
     const session = await getSession()
     if (!session) {
@@ -33,14 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { topic, startTime, durationMinutes, timezone, agenda } = body
-
-    if (!topic || !startTime || !durationMinutes) {
-      return NextResponse.json(
-        { error: 'Missing required fields: topic, startTime, durationMinutes' },
-        { status: 400 }
-      )
-    }
+    const { topic, startTime, durationMinutes, timezone, agenda } = createZoomMeetingRequestSchema.parse(body)
 
     const meeting = await createZoomMeeting({
       topic,
@@ -52,10 +58,21 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(meeting)
   } catch (error) {
-    console.error('Error creating Zoom meeting:', error)
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.issues },
+        { status: 400 }
+      )
+    }
+    logger.error({ message: 'Error creating Zoom meeting', error })
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to create meeting' },
       { status: 500 }
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

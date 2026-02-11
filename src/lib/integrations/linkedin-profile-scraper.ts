@@ -8,10 +8,15 @@
  * Rate limit: max 500 profiles/day per LinkedIn account.
  */
 
+// @ts-ignore - apify-client has broken type definitions referencing non-existent src/ paths
 import { ApifyClient } from 'apify-client'
+import { env } from '@/lib/env'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('integration:linkedin-scraper')
 
 const apifyClient = new ApifyClient({
-  token: process.env.APIFY_API_TOKEN || '',
+  token: env.APIFY_API_TOKEN || '',
 })
 
 const LINKEDIN_SCRAPER_ACTOR_ID = '2SyF0bVxmgGr8IVCZ'  // dev_fusion/linkedin-profile-scraper (no cookies required)
@@ -93,18 +98,27 @@ export async function scrapeLinkedInProfile(
   // Clean the URL
   const cleanUrl = linkedinUrl.trim().replace(/\/$/, '')
   if (!cleanUrl.includes('linkedin.com/in/')) {
-    console.warn(`[LinkedIn Scraper] Invalid LinkedIn URL: ${cleanUrl}`)
+    logger.warn({
+      message: 'Invalid LinkedIn URL',
+      url: cleanUrl,
+    })
     return null
   }
 
   // Check rate limit
   if (!checkDailyLimit()) {
-    console.warn('[LinkedIn Scraper] Daily rate limit reached (500/day)')
+    logger.warn({
+      message: 'Daily rate limit reached',
+      limit: DAILY_LIMIT,
+    })
     return null
   }
 
   try {
-    console.log(`[LinkedIn Scraper] Scraping profile: ${cleanUrl}`)
+    logger.info({
+      message: 'Scraping LinkedIn profile',
+      url: cleanUrl,
+    })
 
     const run = await apifyClient.actor(LINKEDIN_SCRAPER_ACTOR_ID).call(
       {
@@ -121,7 +135,9 @@ export async function scrapeLinkedInProfile(
       .listItems()
 
     if (!items || items.length === 0) {
-      console.warn('[LinkedIn Scraper] No results returned')
+      logger.warn({
+        message: 'No results returned from scraper',
+      })
       return null
     }
 
@@ -130,7 +146,10 @@ export async function scrapeLinkedInProfile(
     const profile = items[0] as Record<string, any>
     return mapProfileData(profile)
   } catch (error) {
-    console.error('[LinkedIn Scraper] Error scraping profile:', error)
+    logger.error({
+      message: 'Error scraping LinkedIn profile',
+      error,
+    })
     return null
   }
 }

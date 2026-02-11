@@ -10,6 +10,9 @@ import { db } from '@/lib/db'
 import { jobs, candidates } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { generateFreeLeads } from '@/lib/integrations/free-tier-orchestrator'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('lib:auto-lead-generation')
 
 export interface LeadGenerationStats {
   jobId: string
@@ -42,7 +45,7 @@ export async function triggerLeadGenerationForJob(
   companyId: string,
   maxLeads: number = 20
 ): Promise<LeadGenerationStats> {
-  console.log('[Auto Lead Gen] Starting for job:', jobId)
+  logger.info({ message: 'Starting lead generation for job', jobId })
 
   // =============================================================================
   // Step 1: Fetch and validate job details
@@ -66,11 +69,7 @@ export async function triggerLeadGenerationForJob(
   const jobTitle = job.title
   const location = job.location || 'United States' // Default to US if no location specified
 
-  console.log('[Auto Lead Gen] Job details:', {
-    id: job.id,
-    title: jobTitle,
-    location,
-  })
+  logger.info({ message: 'Job details', jobId: job.id, title: jobTitle, location })
 
   // =============================================================================
   // Step 2: Generate leads using free-tier orchestrator
@@ -78,11 +77,7 @@ export async function triggerLeadGenerationForJob(
 
   const safeMaxLeads = Math.min(Math.max(maxLeads, 1), 50) // Clamp to 1-50
 
-  console.log('[Auto Lead Gen] Calling free-tier orchestrator:', {
-    jobTitle,
-    location,
-    maxLeads: safeMaxLeads,
-  })
+  logger.info({ message: 'Calling free-tier orchestrator', jobTitle, location, maxLeads: safeMaxLeads })
 
   const { leads, stats } = await generateFreeLeads(
     jobTitle,
@@ -91,7 +86,8 @@ export async function triggerLeadGenerationForJob(
     companyId // Pass company ID for usage tracking
   )
 
-  console.log('[Auto Lead Gen] Generated leads:', {
+  logger.info({
+    message: 'Generated leads',
     totalLeads: leads.length,
     emailsFound: stats.emailsFound,
     phonesFound: stats.phonesFound,
@@ -136,12 +132,12 @@ export async function triggerLeadGenerationForJob(
 
       savedCandidates.push(savedCandidate)
     } catch (error) {
-      console.error('[Auto Lead Gen] Error saving candidate:', lead.fullName, error)
+      logger.error({ message: 'Error saving candidate', leadName: lead.fullName, error })
       // Continue with other leads even if one fails
     }
   }
 
-  console.log('[Auto Lead Gen] Saved to database:', savedCandidates.length)
+  logger.info({ message: 'Saved to database', count: savedCandidates.length })
 
   // =============================================================================
   // Step 4: Return statistics
@@ -165,7 +161,7 @@ export async function triggerLeadGenerationForJob(
     remainingApifyCredits: stats.remainingApifyCredits,
   }
 
-  console.log('[Auto Lead Gen] Complete:', result)
+  logger.info({ message: 'Lead generation complete', result })
 
   return result
 }

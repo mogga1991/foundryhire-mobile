@@ -11,6 +11,7 @@ interface ZoomMeetingEmbedProps {
   userEmail: string
   password?: string
   role: 0 | 1 // 0 = participant, 1 = host
+  portalToken?: string // Optional portal token for candidate access
   onMeetingEnd?: () => void
   onMeetingError?: (error: Error) => void
 }
@@ -31,6 +32,7 @@ export function ZoomMeetingEmbed({
   userEmail,
   password = '',
   role,
+  portalToken,
   onMeetingEnd,
   onMeetingError,
 }: ZoomMeetingEmbedProps) {
@@ -79,9 +81,16 @@ export function ZoomMeetingEmbed({
         })
 
         // Get signature from our API
+        const headers: HeadersInit = { 'Content-Type': 'application/json' }
+
+        // Add Bearer token for portal access if provided
+        if (portalToken) {
+          headers['Authorization'] = `Bearer ${portalToken}`
+        }
+
         const signatureResponse = await fetch('/api/zoom/signature', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             meetingNumber,
             role,
@@ -137,7 +146,7 @@ export function ZoomMeetingEmbed({
         }
       }
     }
-  }, [isMounted, meetingNumber, userName, userEmail, password, role, onMeetingEnd, onMeetingError])
+  }, [isMounted, meetingNumber, userName, userEmail, password, role, portalToken, onMeetingEnd, onMeetingError])
 
   // Don't render on server side
   if (!isMounted) {

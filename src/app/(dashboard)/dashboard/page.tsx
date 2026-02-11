@@ -25,7 +25,11 @@ import {
   CampaignPerformance,
   type CampaignPerformanceItem,
 } from '@/components/dashboard/campaign-performance'
-import { Trophy, BarChart3 } from 'lucide-react'
+import { Trophy, BarChart3, Calendar } from 'lucide-react'
+import {
+  InterviewPipelineChart,
+  UpcomingInterviewsWidget,
+} from '@/components/dashboard/dashboard-widgets'
 
 export const metadata = {
   title: 'Dashboard - VerticalHire',
@@ -376,6 +380,39 @@ export default async function DashboardPage() {
 
       {/* Stats */}
       <StatsGrid stats={stats} />
+
+      {/* Interview Pipeline & Upcoming Interviews */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Interview Pipeline</CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Status distribution of all interviews
+              </p>
+            </div>
+            <BarChart3 className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <InterviewPipelineChart />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Upcoming Interviews</CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Next scheduled interviews
+              </p>
+            </div>
+            <Calendar className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <UpcomingInterviewsWidget />
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Top Candidates & Campaign Performance */}
       <div className="grid gap-6 lg:grid-cols-2">

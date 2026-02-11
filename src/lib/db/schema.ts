@@ -2,6 +2,7 @@ import {
   pgTable,
   uuid,
   text,
+  varchar,
   timestamp,
   integer,
   boolean,
@@ -172,6 +173,8 @@ export const candidates = pgTable('candidates', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   // Enrichment status for progressive enrichment
   enrichmentStatus: text('enrichment_status').default('pending'), // pending, partial, complete, failed
+  // GDPR compliance
+  gdprDeletedAt: timestamp('gdpr_deleted_at', { withTimezone: true }), // Timestamp when GDPR deletion was processed
 }, (table) => [
   index('candidates_company_id_idx').on(table.companyId),
   index('candidates_job_id_idx').on(table.jobId),
@@ -430,6 +433,7 @@ export const emailQueue = pgTable('email_queue', {
   index('email_queue_priority_idx').on(table.priority, table.nextAttemptAt),
   index('email_queue_campaign_send_idx').on(table.campaignSendId),
   index('email_queue_company_idx').on(table.companyId),
+  index('email_queue_status_next_attempt_priority_idx').on(table.status, table.nextAttemptAt, table.priority),
 ])
 
 export const emailSuppressions = pgTable('email_suppressions', {
@@ -473,6 +477,18 @@ export const candidateUsers = pgTable('candidate_users', {
   uniqueIndex('candidate_users_email_idx').on(table.email),
 ])
 
+// Candidate Preferences
+export const candidatePreferences = pgTable('candidate_preferences', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  candidateUserId: uuid('candidate_user_id').notNull().references(() => candidateUsers.id, { onDelete: 'cascade' }).unique(),
+  emailNotifications: boolean('email_notifications').default(true).notNull(),
+  jobAlerts: boolean('job_alerts').default(true).notNull(),
+  interviewReminders: boolean('interview_reminders').default(true).notNull(),
+  marketingEmails: boolean('marketing_emails').default(false).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
 // Employer reach-outs to candidates
 export const candidateReachOuts = pgTable('candidate_reach_outs', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -501,6 +517,21 @@ export const campaignFollowUps = pgTable('campaign_follow_ups', {
 }, (table) => [
   index('campaign_follow_ups_campaign_idx').on(table.campaignId),
   uniqueIndex('campaign_follow_ups_campaign_step_idx').on(table.campaignId, table.stepNumber),
+])
+
+// Campaign Templates
+export const campaignTemplates = pgTable('campaign_templates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  isSystem: boolean('is_system').notNull().default(false),
+  createdBy: uuid('created_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('campaign_templates_company_id_idx').on(table.companyId),
 ])
 
 // =============================================================================
@@ -552,8 +583,29 @@ export const interviews = pgTable('interviews', {
     completed: boolean;
   }>>(),
 
+  // Zoom Meeting Passcode
+  passcode: text('passcode'),
+
+  // Recording Management
+  recordingStatus: text('recording_status').notNull().default('not_started'), // not_started, in_progress, processing, completed, failed
+  recordingDuration: integer('recording_duration'), // Duration in seconds
+  recordingFileSize: integer('recording_file_size'), // File size in bytes
+  recordingProcessedAt: timestamp('recording_processed_at', { withTimezone: true }),
+
+  // Transcript Management
+  transcriptStatus: text('transcript_status').notNull().default('pending'), // pending, processing, completed, failed
+  transcriptProcessedAt: timestamp('transcript_processed_at', { withTimezone: true }),
+
+  // Webhook Tracking
+  webhookLastReceivedAt: timestamp('webhook_last_received_at', { withTimezone: true }),
+  webhookEventType: text('webhook_event_type'),
+
+  // Zoom Host Information
+  zoomHostId: text('zoom_host_id'),
+
   status: text('status').notNull().default('scheduled'), // scheduled, confirmed, in_progress, completed, cancelled, no_show
   cancelReason: text('cancel_reason'),
+  internalNotes: jsonb('internal_notes'), // For internal notes and candidate feedback
 
   scheduledBy: uuid('scheduled_by').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -564,6 +616,9 @@ export const interviews = pgTable('interviews', {
   index('interviews_job_id_idx').on(table.jobId),
   index('interviews_status_idx').on(table.status),
   index('interviews_scheduled_at_idx').on(table.scheduledAt),
+  index('interviews_zoom_meeting_id_idx').on(table.zoomMeetingId),
+  index('interviews_recording_status_idx').on(table.recordingStatus),
+  index('interviews_company_status_scheduled_idx').on(table.companyId, table.status, table.scheduledAt),
 ])
 
 export const interviewFeedback = pgTable('interview_feedback', {
@@ -635,6 +690,46 @@ export const interviewReminders = pgTable('interview_reminders', {
   index('interview_reminders_interview_id_idx').on(table.interviewId),
   index('interview_reminders_scheduled_for_idx').on(table.scheduledFor),
   index('interview_reminders_status_idx').on(table.status),
+])
+
+// =============================================================================
+// Webhook Event Tracking (Idempotency + Retry Queue)
+// =============================================================================
+
+export const webhookEvents = pgTable('webhook_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  provider: text('provider').notNull(), // 'zoom'
+  eventType: text('event_type').notNull(),
+  eventId: text('event_id').notNull(), // Zoom's event ID
+  meetingId: text('meeting_id'),
+  payload: jsonb('payload'),
+  status: text('status').notNull().default('received'), // received, processing, completed, failed, dead_letter
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(3),
+  lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+  nextRetryAt: timestamp('next_retry_at', { withTimezone: true }),
+  errorMessage: text('error_message'),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('webhook_events_provider_event_id_idx').on(table.provider, table.eventId),
+  index('webhook_events_status_next_retry_idx').on(table.status, table.nextRetryAt),
+])
+
+// =============================================================================
+// Webhook Idempotency Table (for email and other simple webhooks)
+// =============================================================================
+
+export const webhookIdempotency = pgTable('webhook_idempotency', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  eventId: varchar('event_id', { length: 255 }).notNull().unique(),
+  eventType: varchar('event_type', { length: 100 }).notNull(),
+  source: varchar('source', { length: 50 }).notNull(), // 'resend', 'zoom', 'stripe', etc.
+  processedAt: timestamp('processed_at', { withTimezone: true }).defaultNow().notNull(),
+  payload: jsonb('payload'), // store original payload for debugging
+}, (table) => [
+  index('idx_webhook_idempotency_event_id').on(table.eventId),
+  index('idx_webhook_idempotency_source_type').on(table.source, table.eventType),
 ])
 
 // =============================================================================
@@ -787,4 +882,177 @@ export const interviewParticipantsRelations = relations(interviewParticipants, (
 export const interviewRemindersRelations = relations(interviewReminders, ({ one }) => ({
   interview: one(interviews, { fields: [interviewReminders.interviewId], references: [interviews.id] }),
   recipientUser: one(users, { fields: [interviewReminders.recipientUserId], references: [users.id] }),
+}))
+
+// =============================================================================
+// Team Management
+// =============================================================================
+
+export const teamMembers = pgTable('team_members', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  userId: varchar('user_id', { length: 255 }), // Clerk user ID
+  email: varchar('email', { length: 255 }).notNull(),
+  firstName: varchar('first_name', { length: 100 }),
+  lastName: varchar('last_name', { length: 100 }),
+  role: varchar('role', { length: 50 }).notNull().default('viewer'), // owner, admin, recruiter, interviewer, viewer
+  status: varchar('status', { length: 50 }).notNull().default('invited'), // active, invited, deactivated
+  invitedBy: varchar('invited_by', { length: 255 }), // Clerk user ID of inviter
+  invitedAt: timestamp('invited_at', { withTimezone: true }).defaultNow(),
+  joinedAt: timestamp('joined_at', { withTimezone: true }),
+  lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
+  permissions: jsonb('permissions'), // Granular permission overrides
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('team_members_company_id_idx').on(table.companyId),
+  index('team_members_user_id_idx').on(table.userId),
+  index('team_members_email_idx').on(table.email),
+  index('team_members_status_idx').on(table.status),
+  uniqueIndex('team_members_company_email_idx').on(table.companyId, table.email),
+])
+
+export const teamInvitations = pgTable('team_invitations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  email: varchar('email', { length: 255 }).notNull(),
+  role: varchar('role', { length: 50 }).notNull().default('viewer'),
+  token: varchar('token', { length: 255 }).notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  invitedBy: varchar('invited_by', { length: 255 }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('team_invitations_company_id_idx').on(table.companyId),
+  index('team_invitations_email_idx').on(table.email),
+  index('team_invitations_token_idx').on(table.token),
+])
+
+// =============================================================================
+// In-App Notifications
+// =============================================================================
+
+export const notifications = pgTable('notifications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  userId: varchar('user_id', { length: 255 }).notNull(), // Recipient Clerk user ID
+  type: varchar('type', { length: 50 }).notNull(), // interview_scheduled, interview_completed, candidate_applied, feedback_submitted, ai_analysis_ready, team_invite, mention, system
+  title: varchar('title', { length: 255 }).notNull(),
+  message: text('message').notNull(),
+  actionUrl: varchar('action_url', { length: 500 }),
+  metadata: jsonb('metadata'),
+  read: boolean('read').notNull().default(false),
+  readAt: timestamp('read_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('notifications_company_id_idx').on(table.companyId),
+  index('notifications_user_id_idx').on(table.userId),
+  index('notifications_read_idx').on(table.read),
+  index('notifications_type_idx').on(table.type),
+  index('notifications_user_read_idx').on(table.userId, table.read),
+  index('notifications_created_at_idx').on(table.createdAt),
+])
+
+// =============================================================================
+// GDPR Compliance
+// =============================================================================
+
+export const gdprAuditLog = pgTable('gdpr_audit_log', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  companyId: text('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  action: text('action').notNull(), // 'right_to_be_forgotten', 'data_export', 'data_retention_cleanup'
+  targetType: text('target_type').notNull(), // 'candidate', 'interview', 'bulk'
+  targetId: text('target_id'),
+  requestedBy: text('requested_by').notNull(), // user ID who initiated
+  details: jsonb('details'), // detailed log of what was done
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('gdpr_audit_log_company_id_idx').on(table.companyId),
+  index('gdpr_audit_log_action_idx').on(table.action),
+  index('gdpr_audit_log_created_at_idx').on(table.createdAt),
+])
+
+export const gdprAuditLogRelations = relations(gdprAuditLog, ({ one }) => ({
+  company: one(companies, { fields: [gdprAuditLog.companyId], references: [companies.id] }),
+}))
+
+// Candidate Preferences Relations
+export const candidatePreferencesRelations = relations(candidatePreferences, ({ one }) => ({
+  candidateUser: one(candidateUsers, { fields: [candidatePreferences.candidateUserId], references: [candidateUsers.id] }),
+}))
+
+// Team Management Relations
+export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
+  company: one(companies, { fields: [teamMembers.companyId], references: [companies.id] }),
+}))
+
+export const teamInvitationsRelations = relations(teamInvitations, ({ one }) => ({
+  company: one(companies, { fields: [teamInvitations.companyId], references: [companies.id] }),
+}))
+
+// Notification Relations
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  company: one(companies, { fields: [notifications.companyId], references: [companies.id] }),
+}))
+
+// =============================================================================
+// Saved Searches (for saved filter configurations)
+// =============================================================================
+
+export const savedSearches = pgTable('saved_searches', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  userId: varchar('user_id', { length: 255 }).notNull(), // Clerk user ID
+  name: varchar('name', { length: 100 }).notNull(),
+  entity: varchar('entity', { length: 50 }).notNull(), // 'candidates' | 'interviews' | 'jobs'
+  filters: jsonb('filters').notNull(), // The saved filter configuration
+  isDefault: boolean('is_default').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('saved_searches_company_id_idx').on(table.companyId),
+  index('saved_searches_user_id_idx').on(table.userId),
+  index('saved_searches_entity_idx').on(table.entity),
+  index('saved_searches_user_entity_idx').on(table.userId, table.entity),
+])
+
+// Saved Searches Relations
+export const savedSearchesRelations = relations(savedSearches, ({ one }) => ({
+  company: one(companies, { fields: [savedSearches.companyId], references: [companies.id] }),
+}))
+
+// Webhook Events Relations (standalone table, no foreign keys)
+export const webhookEventsRelations = relations(webhookEvents, () => ({}))
+
+// Webhook Idempotency Relations (standalone table, no foreign keys)
+export const webhookIdempotencyRelations = relations(webhookIdempotency, () => ({}))
+
+// =============================================================================
+// Question Templates (for interview questions)
+// =============================================================================
+
+export const questionTemplates = pgTable('question_templates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  question: text('question').notNull(),
+  category: varchar('category', { length: 50 }).notNull(), // behavioral, technical, situational, culture_fit, problem_solving
+  difficulty: varchar('difficulty', { length: 20 }).notNull(), // easy, medium, hard
+  targetCompetency: varchar('target_competency', { length: 255 }).notNull(),
+  expectedDuration: integer('expected_duration').notNull(), // minutes
+  evaluationCriteria: text('evaluation_criteria').notNull(),
+  sampleAnswer: text('sample_answer'),
+  jobId: uuid('job_id').references(() => jobs.id, { onDelete: 'set null' }),
+  tags: jsonb('tags').default([]).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('question_templates_company_idx').on(table.companyId),
+  index('question_templates_category_idx').on(table.category),
+  index('question_templates_job_idx').on(table.jobId),
+])
+
+export const questionTemplatesRelations = relations(questionTemplates, ({ one }) => ({
+  company: one(companies, { fields: [questionTemplates.companyId], references: [companies.id] }),
+  job: one(jobs, { fields: [questionTemplates.jobId], references: [jobs.id] }),
 }))

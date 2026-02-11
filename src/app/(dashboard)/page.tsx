@@ -2,8 +2,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { jobs, candidates, companyUsers } from '@/lib/db/schema'
-import { eq, and, isNotNull, desc } from 'drizzle-orm'
+import { jobs, candidates, campaigns, companyUsers } from '@/lib/db/schema'
+import { eq, and, isNotNull, desc, sum } from 'drizzle-orm'
 import { formatDistanceToNow } from 'date-fns'
 import {
   Briefcase,
@@ -114,10 +114,18 @@ export default async function DashboardHomePage() {
 
     totalCandidates = candidatesRaw.length
 
-    // Mock response rate calculation (replace with real data when available)
-    if (totalCandidates > 0) {
-      responseRate = Math.floor(Math.random() * 30 + 15) // 15-45%
-    }
+    // Real response rate calculation from campaigns
+    const campaignStatsResult = await db
+      .select({
+        totalSent: sum(campaigns.totalSent),
+        totalReplied: sum(campaigns.totalReplied),
+      })
+      .from(campaigns)
+      .where(eq(campaigns.companyId, companyUser.companyId))
+
+    const sent = Number(campaignStatsResult[0]?.totalSent ?? 0)
+    const replied = Number(campaignStatsResult[0]?.totalReplied ?? 0)
+    responseRate = sent > 0 ? Math.round((replied / sent) * 100) : 0
   }
 
   return (

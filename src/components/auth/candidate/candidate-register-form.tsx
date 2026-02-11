@@ -86,7 +86,9 @@ export function CandidateRegisterForm() {
 
       const contentType = res.headers.get('content-type')
       if (!contentType || !contentType.includes('application/json')) {
-        console.error('[Candidate Register Error] Server returned non-JSON response:', await res.text())
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[Candidate Register Error] Server returned non-JSON response:', await res.text())
+        }
         toast.error('Registration failed', {
           description: 'Server error. Please try again or contact support.',
         })
@@ -108,7 +110,9 @@ export function CandidateRegisterForm() {
 
       router.push('/portal/verify-email')
     } catch (err) {
-      console.error('[Candidate Register Error]', err)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[Candidate Register Error]', err)
+      }
       toast.error('Registration failed', {
         description: 'An unexpected error occurred. Please try again.',
       })

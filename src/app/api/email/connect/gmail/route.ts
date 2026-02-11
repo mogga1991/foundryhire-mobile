@@ -1,17 +1,18 @@
 import { NextResponse } from 'next/server'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
+import { env } from '@/lib/env'
 import crypto from 'crypto'
 
 export async function GET() {
   try {
     await requireCompanyAccess()
 
-    const clientId = process.env.GOOGLE_CLIENT_ID
+    const clientId = env.GOOGLE_CLIENT_ID
     if (!clientId) {
       return NextResponse.json({ error: 'Google OAuth not configured' }, { status: 500 })
     }
 
-    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/email/connect/gmail/callback`
+    const redirectUri = `${env.NEXT_PUBLIC_APP_URL}/api/email/connect/gmail/callback`
     const state = crypto.randomBytes(16).toString('hex')
 
     const params = new URLSearchParams({

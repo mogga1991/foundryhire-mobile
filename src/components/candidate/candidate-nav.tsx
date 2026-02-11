@@ -58,8 +58,8 @@ export function CandidateNav({ user }: CandidateNavProps) {
   }
 
   return (
-    <header className="bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+    <header className="bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg" role="banner">
+      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4" aria-label="Main navigation">
         <div className="flex items-center justify-between">
           {/* Logo and Title */}
           <Link href="/portal/dashboard" className="flex items-center gap-3">
@@ -90,14 +90,15 @@ export function CandidateNav({ user }: CandidateNavProps) {
                 <Button
                   variant="ghost"
                   className="relative h-10 w-10 rounded-full hover:bg-orange-700"
+                  aria-label="User menu"
                 >
                   <Avatar className="h-10 w-10 border-2 border-white">
-                    <AvatarImage src={user.profileImageUrl || undefined} alt={user.firstName} />
+                    <AvatarImage src={user.profileImageUrl || undefined} alt={`${user.firstName} ${user.lastName} profile picture`} />
                     <AvatarFallback className="bg-orange-800 text-white">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
-                  <ChevronDown className="absolute -bottom-1 -right-1 h-4 w-4 bg-orange-600 rounded-full" />
+                  <ChevronDown className="absolute -bottom-1 -right-1 h-4 w-4 bg-orange-600 rounded-full" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
@@ -112,19 +113,19 @@ export function CandidateNav({ user }: CandidateNavProps) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/portal/profile" className="cursor-pointer">
-                    <User className="mr-2 h-4 w-4" />
+                    <User className="mr-2 h-4 w-4" aria-hidden="true" />
                     <span>Profile</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/portal/notifications" className="cursor-pointer">
-                    <Bell className="mr-2 h-4 w-4" />
+                    <Bell className="mr-2 h-4 w-4" aria-hidden="true" />
                     <span>Notifications</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/portal/settings" className="cursor-pointer">
-                    <Settings className="mr-2 h-4 w-4" />
+                    <Settings className="mr-2 h-4 w-4" aria-hidden="true" />
                     <span>Settings</span>
                   </Link>
                 </DropdownMenuItem>
@@ -133,15 +134,16 @@ export function CandidateNav({ user }: CandidateNavProps) {
                   className="text-red-600 cursor-pointer"
                   onClick={handleLogout}
                   disabled={isLoggingOut}
+                  aria-label={isLoggingOut ? 'Logging out' : 'Log out of your account'}
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
+                  <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
                   <span>{isLoggingOut ? 'Logging out...' : 'Log out'}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
-      </div>
+      </nav>
     </header>
   )
 }

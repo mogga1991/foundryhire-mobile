@@ -34,3 +34,27 @@ export async function requireCompanyAccess() {
     role: companyUser.role,
   }
 }
+
+export async function requireAdminAccess() {
+  const user = await requireAuth()
+
+  const [companyUser] = await db
+    .select({ companyId: companyUsers.companyId, role: companyUsers.role })
+    .from(companyUsers)
+    .where(eq(companyUsers.userId, user.id))
+    .limit(1)
+
+  if (!companyUser) {
+    throw new Error('No company found for user')
+  }
+
+  if (companyUser.role !== 'admin') {
+    throw new Error('Admin access required')
+  }
+
+  return {
+    user,
+    companyId: companyUser.companyId,
+    role: companyUser.role,
+  }
+}

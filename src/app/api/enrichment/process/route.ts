@@ -19,10 +19,16 @@ import { db } from '@/lib/db'
 import { companyUsers, companies } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { processEnrichmentBatch } from '@/lib/services/enrichment-queue'
+import { safeCompare } from '@/lib/security/timing-safe'
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('api:enrichment:process')
 
 export async function POST(request: NextRequest) {
   try {
     const cronSecret = request.headers.get('x-cron-secret')
+    const expectedSecret = env.CRON_SECRET
     const searchParams = request.nextUrl.searchParams
     const batchSize = Math.min(
       parseInt(searchParams.get('batchSize') || '50'),
@@ -30,8 +36,8 @@ export async function POST(request: NextRequest) {
     )
 
     // Cron mode: process for all companies
-    if (cronSecret && cronSecret === process.env.CRON_SECRET) {
-      console.log('[Enrichment Cron] Processing enrichment queue...')
+    if (cronSecret && expectedSecret && safeCompare(cronSecret, expectedSecret)) {
+      logger.info({ message: 'Processing enrichment queue via cron' })
 
       // Get all companies
       const allCompanies = await db
@@ -39,19 +45,24 @@ export async function POST(request: NextRequest) {
         .from(companies)
         .limit(100)
 
-      const results = []
-      for (const company of allCompanies) {
-        const result = await processEnrichmentBatch(company.id, batchSize)
-        if (result.processed > 0) {
-          results.push({ companyId: company.id, ...result })
-        }
-      }
+      // Process companies in parallel batches to avoid N+1 pattern
+      const results = await Promise.all(
+        allCompanies.map(async (company) => {
+          const result = await processEnrichmentBatch(company.id, batchSize)
+          if (result.processed > 0) {
+            return { companyId: company.id, ...result }
+          }
+          return null
+        })
+      )
+
+      const successfulResults = results.filter((r) => r !== null)
 
       return NextResponse.json({
         success: true,
         mode: 'cron',
-        companiesProcessed: results.length,
-        results,
+        companiesProcessed: successfulResults.length,
+        results: successfulResults,
       })
     }
 
@@ -82,7 +93,7 @@ export async function POST(request: NextRequest) {
       ...result,
     })
   } catch (error) {
-    console.error('[Enrichment Process] Error:', error)
+    logger.error({ message: 'Enrichment processing failed', error })
     return NextResponse.json(
       {
         error: 'Enrichment processing failed',

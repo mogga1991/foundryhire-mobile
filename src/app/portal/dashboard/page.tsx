@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getCandidateUser } from '@/lib/auth/get-candidate-user'
 import { CandidateNav } from '@/components/candidate/candidate-nav'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Dashboard - VerticalHire Candidate',
   description: 'View your job applications and opportunities',
@@ -18,11 +20,11 @@ export default async function CandidateDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50">
+    <>
       <CandidateNav user={user} />
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Message */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900">
@@ -246,7 +248,7 @@ export default async function CandidateDashboardPage() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+      </section>
+    </>
   )
 }

@@ -1,3 +1,8 @@
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('email:offer-sent')
+
 interface OfferSentParams {
   candidateEmail: string
   candidateName: string
@@ -120,19 +125,21 @@ Please review the complete offer details, including benefits and terms, in your 
 This offer was sent via VerticalHire. If you have questions, please reach out to your recruitment contact.`
 
   // Use Resend if available, otherwise log
-  if (process.env.RESEND_API_KEY) {
+  if (env.RESEND_API_KEY) {
     const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
+    const resend = new Resend(env.RESEND_API_KEY)
 
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'offers@verticalhire.com',
+      from: env.RESEND_FROM_EMAIL || 'offers@verticalhire.com',
       to: candidateEmail,
       subject,
       html: htmlBody,
       text: textBody,
     })
   } else {
-    console.log(`[Offer Sent] Would send to ${candidateEmail}:`, {
+    logger.info({
+      message: 'Would send offer sent notification (no RESEND_API_KEY)',
+      candidateEmail,
       subject,
       jobTitle,
       companyName,

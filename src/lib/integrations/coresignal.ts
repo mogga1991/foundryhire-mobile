@@ -13,7 +13,11 @@
  * - Finding career progression patterns
  */
 
-const CORESIGNAL_API_KEY = process.env.CORESIGNAL_API_KEY || ''
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('integration:coresignal')
+const CORESIGNAL_API_KEY = env.CORESIGNAL_API_KEY || ''
 const CORESIGNAL_BASE_URL = 'https://api.coresignal.com/cdapi/v1'
 
 // =============================================================================
@@ -103,7 +107,7 @@ export async function searchEmployeesMultiSource(
     const data = await response.json()
     return data.items || []
   } catch (error) {
-    console.error('[Coresignal] Multi-Source search error:', error)
+    logger.error({ message: 'Multi-Source search error', error })
     return []
   }
 }
@@ -131,7 +135,7 @@ export async function getEmployeeMultiSource(
 
     return await response.json()
   } catch (error) {
-    console.error('[Coresignal] Get employee error:', error)
+    logger.error({ message: 'Get employee error', error })
     return null
   }
 }
@@ -172,7 +176,7 @@ export async function searchEmployeesClean(
     const data = await response.json()
     return data.items || []
   } catch (error) {
-    console.error('[Coresignal] Clean search error:', error)
+    logger.error({ message: 'Clean search error', error })
     return []
   }
 }
@@ -213,7 +217,7 @@ export async function searchEmployeesBase(
     const data = await response.json()
     return data.items || []
   } catch (error) {
-    console.error('[Coresignal] Base search error:', error)
+    logger.error({ message: 'Base search error', error })
     return []
   }
 }

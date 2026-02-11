@@ -137,10 +137,14 @@ export function InterviewVideoPanel({
               userEmail={userEmail}
               role={isHost ? 1 : 0}
               onMeetingEnd={() => {
-                console.log('Meeting ended')
+                if (process.env.NODE_ENV !== 'production') {
+                  console.log('Meeting ended')
+                }
               }}
               onMeetingError={(error) => {
-                console.error('Meeting error:', error)
+                if (process.env.NODE_ENV !== 'production') {
+                  console.error('Meeting error:', error)
+                }
               }}
             />
           ) : isLive ? (

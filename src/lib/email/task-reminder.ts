@@ -1,3 +1,8 @@
+import { createLogger } from '@/lib/logger'
+import { env } from '@/lib/env'
+
+const logger = createLogger('email:task-reminder')
+
 interface TaskReminderParams {
   candidateEmail: string
   candidateName: string
@@ -104,19 +109,21 @@ Completing your onboarding tasks on time helps ensure a smooth start at ${compan
 This reminder was sent via VerticalHire onboarding system. If you've already completed this task, please disregard this message.`
 
   // Use Resend if available, otherwise log
-  if (process.env.RESEND_API_KEY) {
+  if (env.RESEND_API_KEY) {
     const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
+    const resend = new Resend(env.RESEND_API_KEY)
 
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'onboarding@verticalhire.com',
+      from: env.RESEND_FROM_EMAIL || 'onboarding@verticalhire.com',
       to: candidateEmail,
       subject,
       html: htmlBody,
       text: textBody,
     })
   } else {
-    console.log(`[Task Reminder] Would send to ${candidateEmail}:`, {
+    logger.info({
+      message: 'Would send task reminder notification (no RESEND_API_KEY)',
+      candidateEmail,
       subject,
       taskTitle,
       daysOverdue,

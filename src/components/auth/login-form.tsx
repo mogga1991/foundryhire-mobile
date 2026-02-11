@@ -63,7 +63,9 @@ export function LoginForm() {
       // Check if response is JSON before parsing
       const contentType = res.headers.get('content-type')
       if (!contentType || !contentType.includes('application/json')) {
-        console.error('[Login Error] Server returned non-JSON response:', await res.text())
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[Login Error] Server returned non-JSON response:', await res.text())
+        }
         toast.error('Sign in failed', {
           description: 'Server error. Please try again or contact support.',
         })
@@ -85,7 +87,9 @@ export function LoginForm() {
 
       router.push('/dashboard')
     } catch (err) {
-      console.error('[Login Error]', err)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[Login Error]', err)
+      }
       toast.error('Sign in failed', {
         description: 'An unexpected error occurred. Please try again.',
       })

@@ -95,7 +95,9 @@ export function JobCard({ job, candidateCount = 0 }: JobCardProps) {
       toast.success('Job duplicated successfully')
       router.refresh()
     } catch (error) {
-      console.error('Failed to duplicate job:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to duplicate job:', error)
+      }
       toast.error(error instanceof Error ? error.message : 'Failed to duplicate job')
     } finally {
       setIsDuplicating(false)
@@ -119,7 +121,9 @@ export function JobCard({ job, candidateCount = 0 }: JobCardProps) {
       setShowArchiveDialog(false)
       router.refresh()
     } catch (error) {
-      console.error('Failed to archive job:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to archive job:', error)
+      }
       toast.error(error instanceof Error ? error.message : 'Failed to archive job')
     } finally {
       setIsArchiving(false)
@@ -143,7 +147,9 @@ export function JobCard({ job, candidateCount = 0 }: JobCardProps) {
       setShowDeleteDialog(false)
       router.refresh()
     } catch (error) {
-      console.error('Failed to delete job:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to delete job:', error)
+      }
       toast.error(error instanceof Error ? error.message : 'Failed to delete job')
     } finally {
       setIsDeleting(false)

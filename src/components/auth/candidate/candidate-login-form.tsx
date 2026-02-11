@@ -51,41 +51,78 @@ export function CandidateLoginForm() {
     setIsLoading(true)
 
     try {
-      const res = await fetch('/api/portal/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: data.email,
-          password: data.password,
-        }),
+      const payload = JSON.stringify({
+        email: data.email,
+        password: data.password,
       })
+      const endpoints = ['/api/candidate/auth/login', '/api/portal/auth/login']
+      let handled = false
+      let lastErrorMessage = 'Server error. Please try again or contact support.'
 
-      // Check if response is JSON before parsing
-      const contentType = res.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
-        console.error('[Candidate Login Error] Server returned non-JSON response:', await res.text())
-        toast.error('Sign in failed', {
-          description: 'Server error. Please try again or contact support.',
+      for (const endpoint of endpoints) {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
         })
-        return
+
+        const contentType = res.headers.get('content-type') || ''
+        const isJson = contentType.includes('application/json')
+
+        if (!isJson) {
+          const bodyText = await res.text()
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn(
+              `[Candidate Login Warning] Non-JSON response from ${endpoint} (status ${res.status}).`,
+              bodyText
+            )
+          }
+
+          // Retry alternate endpoint for route mismatch / stale bundle cases.
+          continue
+        }
+
+        const result = await res.json()
+
+        if (!res.ok) {
+          const message = (result as { error?: string })?.error || 'Invalid credentials'
+          lastErrorMessage = message
+
+          // Invalid credentials should not retry against alternate endpoint.
+          if (res.status === 401) {
+            toast.error('Sign in failed', { description: message })
+            handled = true
+            break
+          }
+
+          // 404 can happen with stale route paths; try fallback endpoint.
+          if (res.status === 404) {
+            continue
+          }
+
+          toast.error('Sign in failed', { description: message })
+          handled = true
+          break
+        }
+
+        toast.success('Welcome back!', {
+          description: 'You have been signed in successfully.',
+        })
+
+        router.push('/portal/dashboard')
+        handled = true
+        break
       }
 
-      const result = await res.json()
-
-      if (!res.ok) {
+      if (!handled) {
         toast.error('Sign in failed', {
-          description: result.error || 'Invalid credentials',
+          description: lastErrorMessage,
         })
-        return
       }
-
-      toast.success('Welcome back!', {
-        description: 'You have been signed in successfully.',
-      })
-
-      router.push('/portal/dashboard')
     } catch (err) {
-      console.error('[Candidate Login Error]', err)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[Candidate Login Error]', err)
+      }
       toast.error('Sign in failed', {
         description: 'An unexpected error occurred. Please try again.',
       })

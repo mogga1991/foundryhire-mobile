@@ -111,7 +111,9 @@ export function CandidateProfileForm({ user }: CandidateProfileFormProps) {
 
       router.refresh()
     } catch (error) {
-      console.error('Profile update error:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Profile update error:', error)
+      }
       toast.error('Failed to update profile', {
         description: error instanceof Error ? error.message : 'Please try again',
       })
@@ -149,7 +151,9 @@ export function CandidateProfileForm({ user }: CandidateProfileFormProps) {
       setResumeFile(null)
       router.refresh()
     } catch (error) {
-      console.error('Resume upload error:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Resume upload error:', error)
+      }
       toast.error('Failed to upload resume', {
         description: error instanceof Error ? error.message : 'Please try again',
       })
@@ -181,7 +185,9 @@ export function CandidateProfileForm({ user }: CandidateProfileFormProps) {
 
       router.refresh()
     } catch (error) {
-      console.error('Resume delete error:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Resume delete error:', error)
+      }
       toast.error('Failed to delete resume', {
         description: error instanceof Error ? error.message : 'Please try again',
       })

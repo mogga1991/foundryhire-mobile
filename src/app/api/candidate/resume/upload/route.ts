@@ -5,6 +5,7 @@ import { candidateUsers } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getCandidateSession } from '@/lib/auth/candidate-session'
 import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 const logger = createLogger('candidate-resume-upload')
 
@@ -20,7 +21,7 @@ const ALLOWED_TYPES = [
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx']
 
-export async function POST(req: NextRequest) {
+async function _POST(req: NextRequest) {
   try {
     const session = await getCandidateSession()
 
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
 }
 
 // Delete old resume
-export async function DELETE(req: NextRequest) {
+async function _DELETE(req: NextRequest) {
   try {
     const session = await getCandidateSession()
 
@@ -152,3 +153,6 @@ export async function DELETE(req: NextRequest) {
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })
+export const DELETE = withApiMiddleware(_DELETE, { csrfProtection: true })

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
+import { createLogger } from '@/lib/logger'
 import { getSession } from '@/lib/auth'
+
+const logger = createLogger('api:auth:session')
 
 export async function GET() {
   try {
@@ -11,7 +14,7 @@ export async function GET() {
 
     return NextResponse.json({ user: session.user })
   } catch (error) {
-    console.error('GET /api/auth/session error:', error)
+    logger.error({ message: 'Failed to get session', error })
     return NextResponse.json({ user: null }, { status: 500 })
   }
 }

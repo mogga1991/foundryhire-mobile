@@ -2,6 +2,9 @@ import { db } from '@/lib/db'
 import { candidateUsers } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getCandidateSession } from './candidate-session'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('lib:auth:get-candidate-user')
 
 export interface CandidateUser {
   id: string
@@ -61,7 +64,7 @@ export async function getCandidateUser(): Promise<CandidateUser | null> {
       createdAt: user.createdAt,
     }
   } catch (error) {
-    console.error('Failed to get candidate user:', error)
+    logger.error({ message: 'Failed to get candidate user', error })
     return null
   }
 }

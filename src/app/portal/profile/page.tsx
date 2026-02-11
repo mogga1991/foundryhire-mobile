@@ -4,6 +4,8 @@ import { getCandidateUser } from '@/lib/auth/get-candidate-user'
 import { CandidateNav } from '@/components/candidate/candidate-nav'
 import { CandidateProfileForm } from '@/components/candidate/profile/candidate-profile-form'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'My Profile - VerticalHire Candidate',
   description: 'Manage your professional profile and credentials',

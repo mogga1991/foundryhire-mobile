@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { writeFile, mkdir, readFile } from 'fs/promises'
 import path from 'path'
@@ -10,6 +12,8 @@ import {
   buildParseJobDescriptionPrompt,
   type ParseJobDescriptionResult,
 } from '@/lib/ai/prompts/parse-job-description'
+
+const logger = createLogger('api:jobs:parse')
 
 // Types for better error handling
 type FileProcessingError = {
@@ -56,7 +60,7 @@ async function extractTextFromFile(file: File, filePath: string): Promise<string
   }
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   let uploadedFilePath: string | null = null
 
   try {
@@ -217,7 +221,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generic error handler
-    console.error('Job document parse error:', error)
+    logger.error({ message: 'Job document parse error', error })
     const message = error instanceof Error ? error.message : 'Failed to process job document'
 
     return NextResponse.json(
@@ -229,3 +233,5 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

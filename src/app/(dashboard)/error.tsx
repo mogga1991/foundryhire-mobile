@@ -11,7 +11,18 @@ export default function DashboardError({
   reset: () => void
 }) {
   useEffect(() => {
-    console.error('[Dashboard Error]', error.message, error.digest)
+    // Report to Sentry via dynamic import (graceful degradation)
+    import('@/lib/monitoring/sentry')
+      .then(({ captureError }) => {
+        captureError(error, {
+          component: 'DashboardError',
+          action: 'unhandled_error',
+          metadata: { digest: error.digest },
+        })
+      })
+      .catch(() => {
+        console.error('[Dashboard Error]', error.message, error.digest)
+      })
   }, [error])
 
   return (

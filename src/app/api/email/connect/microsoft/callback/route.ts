@@ -2,20 +2,24 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { emailAccounts, emailAccountSecrets } from '@/lib/db/schema'
 import { encrypt } from '@/lib/utils/encryption'
+import { env } from '@/lib/env'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('api:email:connect:microsoft:callback')
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code')
   const error = request.nextUrl.searchParams.get('error')
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const appUrl = env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
   if (error || !code) {
     return NextResponse.redirect(`${appUrl}/settings/email?error=oauth_denied`)
   }
 
-  const clientId = process.env.MICROSOFT_CLIENT_ID
-  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET
-  const tenantId = process.env.MICROSOFT_TENANT_ID || 'common'
+  const clientId = env.MICROSOFT_CLIENT_ID
+  const clientSecret = env.MICROSOFT_CLIENT_SECRET
+  const tenantId = env.MICROSOFT_TENANT_ID || 'common'
 
   if (!clientId || !clientSecret) {
     return NextResponse.redirect(`${appUrl}/settings/email?error=not_configured`)
@@ -42,7 +46,7 @@ export async function GET(request: NextRequest) {
     )
 
     if (!tokenResponse.ok) {
-      console.error('[Microsoft OAuth] Token exchange failed:', await tokenResponse.text())
+      logger.error({ message: 'Token exchange failed', responseText: await tokenResponse.text() })
       return NextResponse.redirect(`${appUrl}/settings/email?error=token_exchange_failed`)
     }
 
@@ -101,7 +105,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(`${appUrl}/settings/email?connected=microsoft`)
   } catch (err) {
-    console.error('[Microsoft OAuth] Callback error:', err)
+    logger.error({ message: 'Microsoft OAuth callback error', error: err })
     return NextResponse.redirect(`${appUrl}/settings/email?error=callback_failed`)
   }
 }

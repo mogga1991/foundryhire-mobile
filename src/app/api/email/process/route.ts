@@ -4,30 +4,48 @@
  * POST /api/email/process
  *
  * Processes pending email queue items.
- * Can be triggered manually or via Vercel Cron.
+ * Can be triggered manually (with auth + rate limit) or via Vercel Cron (with secret).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { companyUsers, companies } from '@/lib/db/schema'
+import { companyUsers } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { processEmailBatch, processEmailBatchForCompany } from '@/lib/services/email-queue'
+import { createLogger } from '@/lib/logger'
+import { rateLimit, RateLimitPresets } from '@/lib/rate-limit'
+import { safeCompare } from '@/lib/security/timing-safe'
+import { env } from '@/lib/env'
+
+const logger = createLogger('email-process')
 
 export async function POST(request: NextRequest) {
   try {
     const cronSecret = request.headers.get('x-cron-secret')
+    const expectedSecret = env.CRON_SECRET
     const searchParams = request.nextUrl.searchParams
     const batchSize = Math.min(
       parseInt(searchParams.get('batchSize') || '50'),
       100
     )
 
-    // Cron mode: process globally
-    if (cronSecret && cronSecret === process.env.CRON_SECRET) {
-      console.log('[Email Queue Cron] Processing email queue...')
+    // Cron mode: process globally (no rate limiting)
+    if (cronSecret && expectedSecret && safeCompare(cronSecret, expectedSecret)) {
+      logger.info({
+        message: 'Email queue processing triggered by cron',
+        batchSize,
+      })
+
       const result = await processEmailBatch(batchSize)
-      console.log(`[Email Queue Cron] Processed: ${result.processed}, Succeeded: ${result.succeeded}, Failed: ${result.failed}, Remaining: ${result.remaining}`)
+
+      logger.info({
+        message: 'Email queue cron processing completed',
+        processed: result.processed,
+        succeeded: result.succeeded,
+        failed: result.failed,
+        remaining: result.remaining,
+      })
 
       return NextResponse.json({
         success: true,
@@ -36,9 +54,18 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Manual mode: process for authenticated user's company
+    // Manual mode: require auth and rate limiting
+    // Rate limiting - strict: 5 requests per minute for manual triggers
+    const rateLimitResult = await rateLimit(request, RateLimitPresets.strict)
+    if (rateLimitResult) {
+      return rateLimitResult
+    }
+
     const session = await getSession()
     if (!session) {
+      logger.warn({
+        message: 'Unauthorized email processing attempt',
+      })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -49,10 +76,31 @@ export async function POST(request: NextRequest) {
       .limit(1)
 
     if (!companyUser) {
+      logger.warn({
+        message: 'Email processing attempted by user with no company',
+        userId: session.user.id,
+      })
       return NextResponse.json({ error: 'No company found' }, { status: 400 })
     }
 
+    logger.info({
+      message: 'Email queue processing triggered manually',
+      userId: session.user.id,
+      companyId: companyUser.companyId,
+      batchSize,
+    })
+
     const result = await processEmailBatchForCompany(companyUser.companyId, batchSize)
+
+    logger.info({
+      message: 'Email queue manual processing completed',
+      userId: session.user.id,
+      companyId: companyUser.companyId,
+      processed: result.processed,
+      succeeded: result.succeeded,
+      failed: result.failed,
+      remaining: result.remaining,
+    })
 
     return NextResponse.json({
       success: true,
@@ -60,7 +108,12 @@ export async function POST(request: NextRequest) {
       ...result,
     })
   } catch (error) {
-    console.error('[Email Queue] Error:', error)
+    logger.error({
+      message: 'Email queue processing failed',
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+
     return NextResponse.json(
       {
         error: 'Email queue processing failed',

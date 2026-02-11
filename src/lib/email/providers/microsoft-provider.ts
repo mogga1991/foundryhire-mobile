@@ -1,3 +1,4 @@
+import { env } from '@/lib/env'
 import type { EmailProvider, EmailMessage, EmailSendResult } from '../types'
 
 interface MicrosoftProviderConfig {
@@ -30,9 +31,9 @@ export class MicrosoftProvider implements EmailProvider {
       return this.accessToken
     }
 
-    const clientId = process.env.MICROSOFT_CLIENT_ID
-    const clientSecret = process.env.MICROSOFT_CLIENT_SECRET
-    const tenantId = process.env.MICROSOFT_TENANT_ID || 'common'
+    const clientId = env.MICROSOFT_CLIENT_ID
+    const clientSecret = env.MICROSOFT_CLIENT_SECRET
+    const tenantId = env.MICROSOFT_TENANT_ID || 'common'
 
     if (!clientId || !clientSecret) {
       throw new Error('Microsoft OAuth credentials not configured')

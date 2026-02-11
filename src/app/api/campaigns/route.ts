@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { campaigns, campaignSends, campaignFollowUps, jobs } from '@/lib/db/schema'
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, and, desc, count } from 'drizzle-orm'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+import { rateLimit, getUserIdentifier, RateLimitPresets } from '@/lib/rate-limit'
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,14 +39,41 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'jobId query parameter is required' }, { status: 400 })
     }
 
+    // Parse pagination parameters
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+    const perPage = Math.min(100, Math.max(1, parseInt(searchParams.get('perPage') || '20', 10)))
+    const offset = (page - 1) * perPage
+
+    // Get total count
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(campaigns)
+      .where(and(eq(campaigns.jobId, jobId), eq(campaigns.companyId, companyId)))
+
+    // Get paginated campaigns
     const data = await db
       .select()
       .from(campaigns)
       .where(and(eq(campaigns.jobId, jobId), eq(campaigns.companyId, companyId)))
       .orderBy(desc(campaigns.createdAt))
+      .limit(perPage)
+      .offset(offset)
 
-    return NextResponse.json({ campaigns: data })
+    const totalPages = Math.ceil(total / perPage)
+
+    return NextResponse.json({
+      campaigns: data,
+      pagination: {
+        page,
+        perPage,
+        total,
+        totalPages,
+      },
+    })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -56,9 +85,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const { user, companyId } = await requireCompanyAccess()
+
+    const rateLimitResult = await rateLimit(request, {
+      ...RateLimitPresets.standard,
+      identifier: () => getUserIdentifier(user.id),
+    })
+    if (rateLimitResult) return rateLimitResult
 
     const body = await request.json()
     const {
@@ -130,6 +165,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ campaign }, { status: 201 })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -140,6 +178,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -169,6 +209,7 @@ export async function PATCH(request: NextRequest) {
     if (body.name !== undefined) updateData.name = body.name
     if (body.subject !== undefined) updateData.subject = body.subject
     if (body.body !== undefined) updateData.body = body.body
+    if (body.scheduledAt !== undefined) updateData.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null
 
     const [updated] = await db
       .update(campaigns)
@@ -178,6 +219,9 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ campaign: updated })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

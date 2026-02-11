@@ -41,7 +41,9 @@ export function CandidateNotificationsList({ candidateId }: { candidateId: strin
         setReachOuts(data.reachOuts || [])
       }
     } catch (error) {
-      console.error('Failed to fetch reach-outs:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to fetch reach-outs:', error)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -62,7 +64,9 @@ export function CandidateNotificationsList({ candidateId }: { candidateId: strin
         )
       )
     } catch (error) {
-      console.error('Failed to mark as read:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to mark as read:', error)
+      }
     }
   }
 

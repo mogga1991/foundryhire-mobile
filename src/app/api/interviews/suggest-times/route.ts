@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { db } from '@/lib/db'
 import { candidates, jobs } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { generateJSON } from '@/lib/ai/claude'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('api:interview-suggest-times')
 
 interface SuggestedSlot {
   startTime: string
@@ -12,7 +16,7 @@ interface SuggestedSlot {
   reasoning: string
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const { companyId } = await requireCompanyAccess()
     const { candidateId, jobId } = await request.json()
@@ -116,7 +120,10 @@ Return as JSON:
 
     return NextResponse.json({ slots: formattedSlots })
   } catch (error) {
-    console.error('Error suggesting interview times:', error)
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    logger.error({ message: 'Error suggesting interview times', error })
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -126,3 +133,5 @@ Return as JSON:
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

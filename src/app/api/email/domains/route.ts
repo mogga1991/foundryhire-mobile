@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { domainIdentities } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { ResendProvider } from '@/lib/email/providers/resend-provider'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 
 export async function GET() {
   try {
@@ -24,7 +25,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const { companyId } = await requireCompanyAccess()
     const { domain } = await request.json()
@@ -65,6 +66,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: identity }, { status: 201 })
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -72,3 +76,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })

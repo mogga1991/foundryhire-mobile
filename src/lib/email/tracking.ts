@@ -1,4 +1,6 @@
-const TRACKING_BASE = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+import { env } from '@/lib/env'
+
+const TRACKING_BASE = env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
 /**
  * Inject open tracking pixel and wrap links for click tracking.

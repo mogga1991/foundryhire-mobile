@@ -1,12 +1,15 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Users, Calendar } from 'lucide-react'
+import { Users, Calendar, BarChart3, List } from 'lucide-react'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { interviews, candidates, jobs, companyUsers } from '@/lib/db/schema'
 import { eq, desc } from 'drizzle-orm'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { InterviewCalendar } from '@/components/interviews/interview-calendar'
+import { InterviewAnalytics } from '@/components/interviews/interview-analytics'
+import { InterviewListWithFilters } from '@/components/interviews/interview-list-with-filters'
 
 export const metadata = {
   title: 'Interviews | VerticalHire',
@@ -81,7 +84,7 @@ export default async function InterviewsPage() {
   }
 
   return (
-    <div className="bg-slate-50">
+    <div className="bg-slate-50 min-h-screen">
       {/* Enterprise Header */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
         <div className="px-8 py-6">
@@ -131,7 +134,34 @@ export default async function InterviewsPage() {
       </div>
 
       <div className="px-8 py-6">
-        <InterviewCalendar interviews={upcoming} />
+        <Tabs defaultValue="list" className="space-y-6">
+          <TabsList className="bg-white border">
+            <TabsTrigger value="list" className="gap-2">
+              <List className="h-4 w-4" />
+              All Interviews
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="gap-2">
+              <Calendar className="h-4 w-4" />
+              Calendar
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Analytics
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="list" className="space-y-4">
+            <InterviewListWithFilters />
+          </TabsContent>
+
+          <TabsContent value="calendar" className="space-y-4">
+            <InterviewCalendar interviews={upcoming} />
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-4">
+            <InterviewAnalytics />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

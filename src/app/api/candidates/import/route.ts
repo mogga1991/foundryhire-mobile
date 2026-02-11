@@ -13,36 +13,29 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
-import { db } from '@/lib/db'
-import { companyUsers } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { requireCompanyAccess } from '@/lib/auth-helpers'
 import { importCsvCandidates } from '@/lib/services/csv-import'
 import type { MergeStrategy } from '@/lib/services/deduplication'
+import { rateLimit, getIpIdentifier } from '@/lib/rate-limit'
+import { createLogger } from '@/lib/logger'
+import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+
+const logger = createLogger('csv-import')
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
-    // Authenticate user
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // Rate limit: 5 imports per minute per IP
+    const rateLimitResult = await rateLimit(request, {
+      limit: 5,
+      window: 60000,
+      identifier: (req) => getIpIdentifier(req),
+    })
+    if (rateLimitResult) return rateLimitResult
 
-    // Get user's company
-    const [companyUser] = await db
-      .select({ companyId: companyUsers.companyId })
-      .from(companyUsers)
-      .where(eq(companyUsers.userId, session.user.id))
-      .limit(1)
-
-    if (!companyUser) {
-      return NextResponse.json(
-        { error: 'No company found. Please set up your company first.' },
-        { status: 400 }
-      )
-    }
+    // Authenticate user and get company context
+    const { user, companyId } = await requireCompanyAccess()
 
     // Parse form data
     const formData = await request.formData()
@@ -70,24 +63,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('[CSV Import] Starting import:', {
+    logger.info({
+      message: 'CSV import starting',
       filename: file.name,
       size: `${(file.size / 1024).toFixed(1)}KB`,
-      companyId: companyUser.companyId,
+      companyId,
       jobId,
       mergeStrategy,
+      userId: user.id,
     })
 
     // Read file content
     const csvContent = await file.text()
 
-    // Process import
-    const result = await importCsvCandidates(csvContent, companyUser.companyId, jobId, {
+    // Process import with company scoping
+    const result = await importCsvCandidates(csvContent, companyId, jobId, {
       skipNoEmail: true,
       mergeStrategy,
     })
 
-    console.log('[CSV Import] Complete:', {
+    logger.info({
+      message: 'CSV import complete',
+      companyId,
       totalRows: result.totalRows,
       inserted: result.inserted,
       updated: result.updated,
@@ -101,7 +98,13 @@ export async function POST(request: NextRequest) {
       ...result,
     })
   } catch (error) {
-    console.error('[CSV Import] Error:', error)
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error instanceof Error && error.message === 'No company found for user') {
+      return NextResponse.json({ error: 'No company set up. Please create your company in Settings first.' }, { status: 400 })
+    }
+    logger.error({ message: 'CSV import failed', error })
     return NextResponse.json(
       {
         error: 'CSV import failed',
@@ -111,3 +114,5 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+export const POST = withApiMiddleware(_POST, { csrfProtection: true })
