@@ -77,9 +77,11 @@ export function InterviewVideoPanel({
   const [activeTab, setActiveTab] = useState<'questions' | 'timeline' | 'clips'>('questions')
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
+  const [startedLocally, setStartedLocally] = useState(false)
+  const [isStarting, setIsStarting] = useState(false)
 
-  const isLive = interview.status === 'in_progress'
-  const isScheduled = interview.status === 'scheduled'
+  const isLive = interview.status === 'in_progress' || startedLocally
+  const isScheduled = interview.status === 'scheduled' && !startedLocally
   const isCompleted = interview.status === 'completed'
   const scheduledDate = new Date(interview.scheduledAt)
 
@@ -91,7 +93,7 @@ export function InterviewVideoPanel({
     .slice(0, 2) || 'ME'
 
   // Check if we should embed Zoom meeting
-  const shouldEmbedZoom = isLive && interview.zoomMeetingId
+  const shouldEmbedZoom = (isLive || startedLocally) && interview.zoomMeetingId
   const userName = isHost ? interviewerName : candidateName
   const userEmail = isHost ? interviewerEmail : candidateEmail
 
@@ -213,16 +215,31 @@ export function InterviewVideoPanel({
                   minute: '2-digit',
                 })}
               </p>
-              {interview.zoomStartUrl && (
-                <a
-                  href={interview.zoomStartUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-xl font-medium transition text-sm flex items-center gap-2"
+              {interview.zoomMeetingId && (
+                <button
+                  onClick={async () => {
+                    setIsStarting(true)
+                    try {
+                      // Update interview status to in_progress
+                      await fetch(`/api/interviews/${interview.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'in_progress' }),
+                      })
+                      setStartedLocally(true)
+                    } catch {
+                      // Still start locally even if status update fails
+                      setStartedLocally(true)
+                    } finally {
+                      setIsStarting(false)
+                    }
+                  }}
+                  disabled={isStarting}
+                  className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-medium transition text-sm flex items-center gap-2"
                 >
                   <Video className="h-4 w-4" />
-                  Start Video Call
-                </a>
+                  {isStarting ? 'Connecting...' : 'Start Video Call'}
+                </button>
               )}
             </div>
           ) : (

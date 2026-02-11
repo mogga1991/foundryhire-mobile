@@ -216,14 +216,6 @@ export default async function InterviewDetailPage({ params }: InterviewDetailPag
           </div>
 
           <div className="flex gap-2">
-            {(isUpcoming || isLive) && interview.zoomStartUrl && (
-              <a href={interview.zoomStartUrl} target="_blank" rel="noopener noreferrer">
-                <Button className="gap-2 bg-red-600 hover:bg-red-700">
-                  <Video className="h-4 w-4" />
-                  {isLive ? 'Rejoin Call' : 'Start Call'}
-                </Button>
-              </a>
-            )}
             <Link href={`/candidates/${interview.candidateId}`}>
               <Button variant="outline" className="gap-2">
                 <User className="h-4 w-4" />
