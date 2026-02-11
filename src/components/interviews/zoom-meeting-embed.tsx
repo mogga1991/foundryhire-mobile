@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 
-// Type definition for Zoom SDK
-type ZoomMtgEmbedded = any
+// Zoom SDK CDN URL — loaded via script tag to avoid React 19 bundler conflicts
+const ZOOM_SDK_CDN = 'https://source.zoom.us/meetingsdk/embedded/5.1.0/zoomus-websdk-embedded.umd.min.js'
 
 interface ZoomMeetingEmbedProps {
   meetingNumber: string
@@ -17,14 +17,41 @@ interface ZoomMeetingEmbedProps {
 }
 
 /**
+ * Loads the Zoom Embedded SDK via a <script> tag.
+ * This avoids the "ReactCurrentOwner" crash that happens when
+ * Turbopack / React 19 tries to bundle the Zoom UMD file which
+ * contains its own internal copy of React.
+ */
+function loadZoomScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Already loaded
+    if ((window as any).ZoomMtgEmbedded) {
+      resolve()
+      return
+    }
+
+    // Already loading
+    const existing = document.querySelector(`script[src="${ZOOM_SDK_CDN}"]`)
+    if (existing) {
+      existing.addEventListener('load', () => resolve())
+      existing.addEventListener('error', () => reject(new Error('Failed to load Zoom SDK')))
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = ZOOM_SDK_CDN
+    script.async = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Failed to load Zoom SDK from CDN'))
+    document.head.appendChild(script)
+  })
+}
+
+/**
  * Zoom Meeting Embed Component
  *
- * Embeds a Zoom meeting directly in the page using the Zoom Meeting SDK
- * This component handles:
- * - SDK initialization
- * - Signature generation via API
- * - Meeting join
- * - Cleanup on unmount
+ * Embeds a Zoom meeting directly in the page using the Zoom Meeting SDK.
+ * The SDK is loaded via CDN <script> tag to avoid React 19 bundler conflicts.
  */
 export function ZoomMeetingEmbed({
   meetingNumber,
@@ -47,6 +74,17 @@ export function ZoomMeetingEmbed({
     setIsMounted(true)
   }, [])
 
+  const handleError = useCallback(
+    (err: unknown) => {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to initialize Zoom meeting'
+      setError(errorMessage)
+      setIsLoading(false)
+      onMeetingError?.(err instanceof Error ? err : new Error(errorMessage))
+    },
+    [onMeetingError]
+  )
+
   useEffect(() => {
     if (!isMounted) return
 
@@ -56,8 +94,13 @@ export function ZoomMeetingEmbed({
       try {
         if (!containerRef.current) return
 
-        // Dynamically import Zoom SDK (client-side only)
-        const ZoomMtgEmbedded = (await import('@zoom/meetingsdk/embedded')).default
+        // Load Zoom SDK via CDN script tag
+        await loadZoomScript()
+
+        const ZoomMtgEmbedded = (window as any).ZoomMtgEmbedded
+        if (!ZoomMtgEmbedded) {
+          throw new Error('Zoom SDK failed to initialize')
+        }
 
         // Initialize Zoom client
         const client = ZoomMtgEmbedded.createClient()
@@ -98,7 +141,8 @@ export function ZoomMeetingEmbed({
         })
 
         if (!signatureResponse.ok) {
-          throw new Error('Failed to generate Zoom signature')
+          const body = await signatureResponse.json().catch(() => ({}))
+          throw new Error(body.error || 'Failed to generate Zoom signature')
         }
 
         const { signature } = await signatureResponse.json()
@@ -117,18 +161,9 @@ export function ZoomMeetingEmbed({
         if (mounted) {
           setIsLoading(false)
         }
-
-        // Note: Meeting end event handling would go here if needed
-        // The Zoom SDK events vary by version and configuration
       } catch (err) {
-        console.error('Zoom initialization error:', err)
         if (mounted) {
-          const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Zoom meeting'
-          setError(errorMessage)
-          setIsLoading(false)
-          if (onMeetingError) {
-            onMeetingError(err instanceof Error ? err : new Error(errorMessage))
-          }
+          handleError(err)
         }
       }
     }
@@ -141,12 +176,12 @@ export function ZoomMeetingEmbed({
       if (clientRef.current) {
         try {
           clientRef.current.leaveMeeting()
-        } catch (err) {
-          console.error('Error leaving meeting:', err)
+        } catch {
+          // Ignore cleanup errors
         }
       }
     }
-  }, [isMounted, meetingNumber, userName, userEmail, password, role, portalToken, onMeetingEnd, onMeetingError])
+  }, [isMounted, meetingNumber, userName, userEmail, password, role, portalToken, handleError])
 
   // Don't render on server side
   if (!isMounted) {
