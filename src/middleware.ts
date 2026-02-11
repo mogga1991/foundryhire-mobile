@@ -12,6 +12,8 @@ const publicRoutes = [
   '/portal/forgot-password',
   '/portal/reset-password',
   '/portal/verify-email',
+  '/manifest.json',
+  '/site.webmanifest',
   '/api/webhooks',
   '/api/health',
   '/api/auth',

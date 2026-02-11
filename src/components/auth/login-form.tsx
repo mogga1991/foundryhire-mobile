@@ -84,16 +84,29 @@ export function LoginForm() {
 
   async function onSubmit(data: LoginFormValues) {
     setIsLoading(true)
+    setInlineAuthError(null)
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const payload = JSON.stringify({
+        email: data.email,
+        password: data.password,
+      })
+
+      let res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: data.email,
-          password: data.password,
-        }),
+        body: payload,
       })
+
+      // Some deployments can incorrectly reject the non-trailing route with 405.
+      // Retry once with trailing slash before surfacing an error.
+      if (res.status === 405) {
+        res = await fetch('/api/auth/login/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+        })
+      }
 
       // Check if response is JSON before parsing
       const contentType = res.headers.get('content-type')
@@ -110,6 +123,9 @@ export function LoginForm() {
       const result = await res.json()
 
       if (!res.ok) {
+        if (res.status === 405) {
+          setInlineAuthError('Sign in endpoint rejected POST. Please refresh and try again.')
+        }
         toast.error('Sign in failed', {
           description: result.error || 'Invalid credentials',
         })
