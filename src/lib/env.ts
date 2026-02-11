@@ -34,7 +34,7 @@ const serverEnvSchema = z.object({
   RESEND_WEBHOOK_SECRET: z.string().optional(),
 
   // Email Campaigns - Optional
-  ENCRYPTION_KEY: z.string().length(64).optional(), // 32 bytes = 64 hex chars
+  ENCRYPTION_KEY: z.string().min(16).max(128).optional(), // hex-encoded encryption key
   CRON_SECRET: z.string().optional(),
 
   // OAuth for Email Connections - Optional
@@ -135,11 +135,22 @@ const serverEnvSchema = z.object({
   ADMIN_MIGRATION_TOKEN: z.string().optional(),
 })
 
+type EnvType = z.infer<typeof serverEnvSchema>
+
+let _cachedEnv: EnvType | null = null
+
 /**
  * Validates environment variables and throws if required variables are missing.
- * Optional variables that are missing will only generate warnings in development.
+ * Only runs at runtime (not during build) via lazy initialization.
  */
-function validateEnv() {
+function getValidatedEnv(): EnvType {
+  if (_cachedEnv) return _cachedEnv
+
+  // Skip validation during build phase — env vars aren't available yet
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return process.env as unknown as EnvType
+  }
+
   const result = serverEnvSchema.safeParse(process.env)
 
   if (!result.success) {
@@ -155,18 +166,24 @@ function validateEnv() {
     )
   }
 
-  return result.data
+  _cachedEnv = result.data
+  return _cachedEnv
 }
 
 /**
  * Validated and type-safe environment variables.
- * Use this throughout the app instead of process.env for type safety.
+ * Uses a lazy proxy so validation only runs at runtime, not during build.
  *
  * @example
  * import { env } from '@/lib/env'
  * const dbUrl = env.DATABASE_URL // type-safe and validated
  */
-export const env = validateEnv()
+export const env: EnvType = new Proxy({} as EnvType, {
+  get(_target, prop: string) {
+    const validated = getValidatedEnv()
+    return validated[prop as keyof EnvType]
+  },
+})
 
 /**
  * Feature flags based on configured environment variables.
@@ -178,12 +195,37 @@ export const env = validateEnv()
  *   // Zoom integration is configured
  * }
  */
-export const FEATURES = {
-  zoom: !!(env.ZOOM_ACCOUNT_ID && env.ZOOM_CLIENT_ID && env.ZOOM_CLIENT_SECRET),
-  deepgram: !!env.DEEPGRAM_API_KEY,
-  email: !!env.RESEND_API_KEY,
-  ai: !!env.ANTHROPIC_API_KEY,
-  enrichment: !!(env.LUSHA_API_KEY || env.APOLLO_API_KEY || env.PROXYCURL_API_KEY),
-  payments: !!env.STRIPE_SECRET_KEY,
-  monitoring: !!env.NEXT_PUBLIC_SENTRY_DSN,
-} as const
+export const FEATURES = new Proxy(
+  {} as {
+    readonly zoom: boolean
+    readonly deepgram: boolean
+    readonly email: boolean
+    readonly ai: boolean
+    readonly enrichment: boolean
+    readonly payments: boolean
+    readonly monitoring: boolean
+  },
+  {
+    get(_target, prop: string) {
+      const e = getValidatedEnv()
+      switch (prop) {
+        case 'zoom':
+          return !!(e.ZOOM_ACCOUNT_ID && e.ZOOM_CLIENT_ID && e.ZOOM_CLIENT_SECRET)
+        case 'deepgram':
+          return !!e.DEEPGRAM_API_KEY
+        case 'email':
+          return !!e.RESEND_API_KEY
+        case 'ai':
+          return !!e.ANTHROPIC_API_KEY
+        case 'enrichment':
+          return !!(e.LUSHA_API_KEY || e.APOLLO_API_KEY || e.PROXYCURL_API_KEY)
+        case 'payments':
+          return !!e.STRIPE_SECRET_KEY
+        case 'monitoring':
+          return !!e.NEXT_PUBLIC_SENTRY_DSN
+        default:
+          return undefined
+      }
+    },
+  }
+)
