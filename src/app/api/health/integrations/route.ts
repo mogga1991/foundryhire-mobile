@@ -38,6 +38,15 @@ export async function GET(request: NextRequest) {
 
     // Build integration status
     const integrations = {
+      auth: {
+        configured: !!(env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+        services: {
+          supabaseUrl: !!env.NEXT_PUBLIC_SUPABASE_URL,
+          supabaseAnonKey: !!env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          supabaseServiceRole: !!env.SUPABASE_SERVICE_ROLE_KEY,
+          appUrl: !!env.NEXT_PUBLIC_APP_URL,
+        },
+      },
       zoom: {
         configured: FEATURES.zoom,
         services: {
