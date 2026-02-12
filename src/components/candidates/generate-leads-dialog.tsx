@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Progress } from '@/components/ui/progress'
+import { getCsrfToken } from '@/lib/client/csrf'
 
 interface GenerateLeadsStats {
   totalLeads: number
@@ -53,9 +54,10 @@ export function GenerateLeadsDialog() {
     setStats(null)
 
     try {
+      const csrfToken = await getCsrfToken()
       const response = await fetch('/api/leads/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
         body: JSON.stringify({
           jobTitle,
           location,

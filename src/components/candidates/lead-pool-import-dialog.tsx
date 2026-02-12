@@ -1,14 +1,14 @@
 'use client'
 
 /**
- * CSV Import Dialog Component
+ * Lead Pool CSV Import Dialog
  *
- * Allows users to upload a CSV file (e.g. from Apify leads-scraper-ppe)
- * to bulk import candidates with deduplication.
+ * Imports leads into Supabase `public.leads` (lead pool) for fallback matching.
+ * Supports the Apify leads-scraper-ppe CSV format.
  */
 
-import { useState, useRef } from 'react'
-import { Upload, Loader2, CheckCircle, AlertCircle, FileSpreadsheet } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Upload, Loader2, CheckCircle, AlertCircle, Database, FileSpreadsheet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -21,38 +21,34 @@ import {
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Progress } from '@/components/ui/progress'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { getCsrfToken } from '@/lib/client/csrf'
 
-interface CsvImportResult {
+interface LeadPoolImportResult {
   totalRows: number
   validRows: number
-  skippedNoEmail: number
-  inserted: number
-  updated: number
-  duplicatesSkipped: number
-  errors: string[]
+  insertedOrUpdated: number
+  skippedInvalid: number
+  errors: Array<{ row: number; error: string }>
 }
 
-export function CsvImportDialog() {
+function isUuid(v: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
+}
+
+export function LeadPoolImportDialog() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [file, setFile] = useState<File | null>(null)
-  const [mergeStrategy, setMergeStrategy] = useState<string>('merge_best')
-  const [result, setResult] = useState<CsvImportResult | null>(null)
+  const [jobId, setJobId] = useState('')
+  const [result, setResult] = useState<LeadPoolImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0]
     if (selected) {
-      if (!selected.name.endsWith('.csv')) {
+      if (!selected.name.toLowerCase().endsWith('.csv')) {
         setError('Please select a CSV file')
         return
       }
@@ -70,6 +66,11 @@ export function CsvImportDialog() {
       setError('Please select a CSV file')
       return
     }
+    const trimmedJobId = jobId.trim()
+    if (trimmedJobId && !isUuid(trimmedJobId)) {
+      setError('Job ID must be a UUID (or leave it blank)')
+      return
+    }
 
     setLoading(true)
     setError(null)
@@ -79,26 +80,30 @@ export function CsvImportDialog() {
       const csrfToken = await getCsrfToken()
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('mergeStrategy', mergeStrategy)
+      if (trimmedJobId) formData.append('jobId', trimmedJobId)
 
-      const response = await fetch('/api/candidates/import', {
+      const response = await fetch('/api/leads/pool/import', {
         method: 'POST',
         headers: { 'x-csrf-token': csrfToken },
         body: formData,
       })
 
       const data = await response.json()
-
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to import CSV')
+        throw new Error(data.error || data.message || 'Failed to import lead pool CSV')
       }
 
-      setResult(data.result)
+      // Route returns `{ success: true, ...result }`
+      setResult({
+        totalRows: data.totalRows ?? 0,
+        validRows: data.validRows ?? 0,
+        insertedOrUpdated: data.insertedOrUpdated ?? 0,
+        skippedInvalid: data.skippedInvalid ?? 0,
+        errors: data.errors ?? [],
+      })
 
-      // Reload page after 3 seconds to show new candidates
-      setTimeout(() => {
-        window.location.reload()
-      }, 3000)
+      // Optional: reload to reflect any UI that depends on lead pool stats
+      setTimeout(() => window.location.reload(), 2500)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -108,13 +113,11 @@ export function CsvImportDialog() {
 
   const resetForm = () => {
     setFile(null)
-    setMergeStrategy('merge_best')
+    setJobId('')
     setResult(null)
     setError(null)
     setLoading(false)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const formatFileSize = (bytes: number) => {
@@ -128,32 +131,28 @@ export function CsvImportDialog() {
       open={open}
       onOpenChange={(isOpen) => {
         setOpen(isOpen)
-        if (!isOpen) {
-          setTimeout(resetForm, 200)
-        }
+        if (!isOpen) setTimeout(resetForm, 200)
       }}
     >
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
-          <Upload className="h-4 w-4" />
-          Import CSV
+          <Database className="h-4 w-4" />
+          Lead Pool
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5 text-primary" />
-            Import Candidates from CSV
+            Import Lead Pool CSV
           </DialogTitle>
           <DialogDescription>
-            Upload a CSV file to bulk import candidates. Supports Apify leads-scraper-ppe format.
-            Duplicates are automatically detected and handled.
+            Upload a CSV of leads to populate your fallback lead pool (Supabase). Supports Apify leads-scraper-ppe.
           </DialogDescription>
         </DialogHeader>
 
         {!result ? (
           <div className="space-y-4 py-4">
-            {/* File Drop Zone */}
             <div className="space-y-2">
               <Label>CSV File</Label>
               <div
@@ -171,43 +170,29 @@ export function CsvImportDialog() {
                   <div className="space-y-1">
                     <FileSpreadsheet className="h-8 w-8 text-primary mx-auto" />
                     <p className="text-sm font-medium">{file.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatFileSize(file.size)}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
                   </div>
                 ) : (
                   <div className="space-y-1">
                     <Upload className="h-8 w-8 text-muted-foreground mx-auto" />
-                    <p className="text-sm text-muted-foreground">
-                      Click to select a CSV file
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Max 50MB, .csv format
-                    </p>
+                    <p className="text-sm text-muted-foreground">Click to select a CSV file</p>
+                    <p className="text-xs text-muted-foreground">Max 50MB, .csv format</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Merge Strategy */}
             <div className="space-y-2">
-              <Label htmlFor="mergeStrategy">Duplicate Handling</Label>
-              <Select value={mergeStrategy} onValueChange={setMergeStrategy}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="merge_best">Merge Best Data (Recommended)</SelectItem>
-                  <SelectItem value="keep_existing">Keep Existing Records</SelectItem>
-                  <SelectItem value="prefer_new">Prefer New Data</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="jobId">Associate With Job (Optional)</Label>
+              <Input
+                id="jobId"
+                placeholder="Job UUID (leave blank to import unassigned)"
+                value={jobId}
+                onChange={(e) => setJobId(e.target.value)}
+                disabled={loading}
+              />
               <p className="text-xs text-muted-foreground">
-                {mergeStrategy === 'merge_best'
-                  ? 'Combines the best data from both existing and new records.'
-                  : mergeStrategy === 'keep_existing'
-                    ? 'Skips candidates that already exist in your database.'
-                    : 'Overwrites existing records with new CSV data.'}
+                If provided, searches can filter by this job. Otherwise leads are stored at the company level.
               </p>
             </div>
 
@@ -222,18 +207,14 @@ export function CsvImportDialog() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Importing candidates... This may take a moment for large files.
+                  Importing lead pool... This may take a moment for large files.
                 </div>
                 <Progress value={50} className="h-2" />
               </div>
             )}
 
             <div className="flex gap-2 pt-2">
-              <Button
-                onClick={handleImport}
-                disabled={loading || !file}
-                className="flex-1"
-              >
+              <Button onClick={handleImport} disabled={loading || !file} className="flex-1">
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -241,16 +222,12 @@ export function CsvImportDialog() {
                   </>
                 ) : (
                   <>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Import Candidates
+                    <Database className="mr-2 h-4 w-4" />
+                    Import Lead Pool
                   </>
                 )}
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => setOpen(false)}
-                disabled={loading}
-              >
+              <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>
                 Cancel
               </Button>
             </div>
@@ -260,7 +237,7 @@ export function CsvImportDialog() {
             <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
               <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
               <AlertDescription className="text-green-800 dark:text-green-200">
-                Successfully imported candidates from CSV!
+                Imported lead pool rows into Supabase.
               </AlertDescription>
             </Alert>
 
@@ -270,47 +247,40 @@ export function CsvImportDialog() {
                 <p className="text-2xl font-bold">{result.totalRows}</p>
               </div>
               <div className="space-y-1 rounded-lg border p-3">
-                <p className="text-muted-foreground">New Candidates</p>
-                <p className="text-2xl font-bold text-green-600">{result.inserted}</p>
+                <p className="text-muted-foreground">Valid Rows</p>
+                <p className="text-2xl font-bold">{result.validRows}</p>
               </div>
               <div className="space-y-1 rounded-lg border p-3">
-                <p className="text-muted-foreground">Updated</p>
-                <p className="text-2xl font-bold text-blue-600">{result.updated}</p>
+                <p className="text-muted-foreground">Upserted</p>
+                <p className="text-2xl font-bold text-green-600">{result.insertedOrUpdated}</p>
               </div>
               <div className="space-y-1 rounded-lg border p-3">
-                <p className="text-muted-foreground">Skipped</p>
-                <p className="text-2xl font-bold text-muted-foreground">
-                  {result.duplicatesSkipped + result.skippedNoEmail}
-                </p>
+                <p className="text-muted-foreground">Skipped Invalid</p>
+                <p className="text-2xl font-bold text-muted-foreground">{result.skippedInvalid}</p>
               </div>
             </div>
 
-            <div className="space-y-1 rounded-lg border p-3 text-xs text-muted-foreground">
-              <div className="flex justify-between">
-                <span>Rows without email (skipped):</span>
-                <span className="font-medium">{result.skippedNoEmail}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Duplicates skipped:</span>
-                <span className="font-medium">{result.duplicatesSkipped}</span>
-              </div>
-              {result.errors.length > 0 && (
-                <div className="flex justify-between">
-                  <span>Errors:</span>
-                  <span className="font-medium text-red-600">{result.errors.length}</span>
+            {result.errors.length > 0 && (
+              <div className="space-y-2 rounded-lg border p-3 text-xs">
+                <p className="font-medium text-muted-foreground">
+                  Errors: <span className="text-red-600">{result.errors.length}</span>
+                </p>
+                <div className="max-h-40 overflow-auto text-muted-foreground">
+                  {result.errors.slice(0, 20).map((e, idx) => (
+                    <div key={idx}>
+                      Row {e.row}: {e.error}
+                    </div>
+                  ))}
+                  {result.errors.length > 20 && <div>…and more</div>}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <p className="text-xs text-muted-foreground text-center">
-              Page will reload in 3 seconds to show new candidates...
+              Page will reload in a moment.
             </p>
 
-            <Button
-              onClick={() => setOpen(false)}
-              variant="outline"
-              className="w-full"
-            >
+            <Button onClick={() => setOpen(false)} variant="outline" className="w-full">
               Close
             </Button>
           </div>
@@ -319,3 +289,4 @@ export function CsvImportDialog() {
     </Dialog>
   )
 }
+

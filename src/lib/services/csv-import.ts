@@ -77,7 +77,14 @@ export function parseCsv(csvContent: string): ApifyCsvRow[] {
   const result = Papa.parse<ApifyCsvRow>(csvContent, {
     header: true,
     skipEmptyLines: true,
-    transformHeader: (header: string) => header.trim(),
+    // Apify CSV exports sometimes include a UTF-8 BOM and quoted headers.
+    transformHeader: (header: string) => {
+      const h = header.replace(/^\uFEFF/, '').trim()
+      if (h.startsWith('"') && h.endsWith('"') && h.length >= 2) {
+        return h.slice(1, -1).trim()
+      }
+      return h
+    },
   })
 
   // Filter out non-data rows (Apify status messages contain emoji indicators)
