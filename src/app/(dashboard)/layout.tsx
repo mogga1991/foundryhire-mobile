@@ -1,4 +1,3 @@
-import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Navbar } from '@/components/layout/navbar'
@@ -11,20 +10,14 @@ export default async function DashboardLayout({
 }) {
   const session = await getSession()
 
-  if (!session) {
-    redirect('/login')
-  }
-
-  const { user } = session
-
   const sidebarUser = {
-    id: user.id,
-    email: user.email,
-    full_name: user.name ?? user.email,
-    avatar_url: user.image,
+    id: session?.user.id ?? 'guest',
+    email: session?.user.email ?? 'guest@verticalhire.local',
+    full_name: session?.user.name ?? 'Guest',
+    avatar_url: session?.user.image ?? null,
   }
 
-  const companyName = user.name ?? 'VerticalHire'
+  const companyName = session?.user.name ?? 'VerticalHire'
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">

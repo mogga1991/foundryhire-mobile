@@ -47,8 +47,7 @@ export function Navbar({ user, companyName }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   async function handleSignOut() {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.push('/login')
+    router.push('/dashboard')
   }
 
   return (

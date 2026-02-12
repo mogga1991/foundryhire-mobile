@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
-export default function SSOCallbackPage() {
+export default function SignupPage() {
   redirect('/dashboard')
 }

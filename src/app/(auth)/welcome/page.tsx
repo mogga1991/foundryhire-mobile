@@ -1,12 +1,5 @@
-import type { Metadata } from 'next'
-import { MobileWelcomeScreen } from '@/components/auth/mobile-welcome-screen'
-
-export const metadata: Metadata = {
-  title: 'Welcome - VerticalHire',
-  description:
-    'Welcome to VerticalHire - AI-powered construction recruitment platform',
-}
+import { redirect } from 'next/navigation'
 
 export default function WelcomePage() {
-  return <MobileWelcomeScreen />
+  redirect('/dashboard')
 }

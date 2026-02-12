@@ -29,6 +29,16 @@ const serverEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
 
   // =============================================================================
+  // Clerk Auth - Optional in schema, but required in production if using Clerk
+  // =============================================================================
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().optional(),
+  CLERK_SECRET_KEY: z.string().optional(),
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL: z.string().optional(),
+  NEXT_PUBLIC_CLERK_SIGN_UP_URL: z.string().optional(),
+  NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: z.string().optional(),
+  NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: z.string().optional(),
+
+  // =============================================================================
   // Email Infrastructure - Optional
   // =============================================================================
   RESEND_API_KEY: z.string().optional(),

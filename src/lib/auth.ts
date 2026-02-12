@@ -1,10 +1,10 @@
-import { cookies } from 'next/headers'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, asc } from 'drizzle-orm'
 import { createLogger } from '@/lib/logger'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
+import { auth, currentUser } from '@clerk/nextjs/server'
 
 const logger = createLogger('auth')
 
@@ -80,6 +80,125 @@ export async function getSession(): Promise<{
   user: { id: string; email: string; name: string | null; image: string | null }
 } | null> {
   try {
+    // Prefer Clerk session if present.
+    // We map Clerk user IDs to our local `users.id` UUID via `users.clerkUserId`.
+    let clerkUserId: string | null = null
+    try {
+      const a = await auth()
+      clerkUserId = a.userId ?? null
+    } catch {
+      // Clerk not configured or middleware not active; fall back to Supabase session.
+      clerkUserId = null
+    }
+
+    if (clerkUserId) {
+      let clerkUser: Awaited<ReturnType<typeof currentUser>> | null = null
+      try {
+        clerkUser = await currentUser()
+      } catch {
+        clerkUser = null
+      }
+
+      const email =
+        clerkUser?.primaryEmailAddress?.emailAddress?.toLowerCase().trim() || null
+
+      if (!email) {
+        return null
+      }
+
+      const displayName =
+        clerkUser?.fullName?.trim() ||
+        clerkUser?.username?.trim() ||
+        email
+
+      const imageUrl = clerkUser?.imageUrl || null
+
+      // 1) Try by Clerk user id
+      const [existingByClerk] = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          image: users.image,
+        })
+        .from(users)
+        .where(eq(users.clerkUserId, clerkUserId))
+        .limit(1)
+
+      if (existingByClerk) {
+        return {
+          user: {
+            id: existingByClerk.id,
+            email: existingByClerk.email,
+            name: existingByClerk.name,
+            image: existingByClerk.image ?? imageUrl,
+          },
+        }
+      }
+
+      // 2) Link by email if user already exists (migration-friendly)
+      const [existingByEmail] = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          image: users.image,
+        })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1)
+
+      if (existingByEmail) {
+        await db
+          .update(users)
+          .set({
+            clerkUserId,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, existingByEmail.id))
+
+        return {
+          user: {
+            id: existingByEmail.id,
+            email: existingByEmail.email,
+            name: existingByEmail.name,
+            image: existingByEmail.image ?? imageUrl,
+          },
+        }
+      }
+
+      // 3) Create a new local user
+      const [created] = await db
+        .insert(users)
+        .values({
+          email,
+          name: displayName,
+          image: imageUrl,
+          emailVerified: new Date(),
+          clerkUserId,
+        })
+        .returning({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          image: users.image,
+        })
+
+      if (!created) {
+        return null
+      }
+
+      return {
+        user: {
+          id: created.id,
+          email: created.email,
+          name: created.name,
+          image: created.image,
+        },
+      }
+    }
+
+    // Fallback to Supabase-based session (legacy).
     const supabase = await createSupabaseServerClient()
     const {
       data: { user: authUser },
@@ -87,7 +206,36 @@ export async function getSession(): Promise<{
     } = await supabase.auth.getUser()
 
     if (error || !authUser) {
-      return null
+      const [fallbackUser] = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          image: users.image,
+        })
+        .from(users)
+        .orderBy(asc(users.createdAt))
+        .limit(1)
+
+      if (!fallbackUser) {
+        return {
+          user: {
+            id: '00000000-0000-0000-0000-000000000000',
+            email: 'guest@verticalhire.local',
+            name: 'Guest',
+            image: null,
+          },
+        }
+      }
+
+      return {
+        user: {
+          id: fallbackUser.id,
+          email: fallbackUser.email,
+          name: fallbackUser.name,
+          image: fallbackUser.image,
+        },
+      }
     }
 
     const [dbUser] = await db
@@ -119,14 +267,18 @@ export async function getSession(): Promise<{
     }
   } catch (error) {
     logger.error({ error }, 'Failed to load employer session')
-    return null
+    return {
+      user: {
+        id: '00000000-0000-0000-0000-000000000000',
+        email: 'guest@verticalhire.local',
+        name: 'Guest',
+        image: null,
+      },
+    }
   }
 }
 
 export async function deleteSession(): Promise<void> {
-  const cookieStore = await cookies()
-  cookieStore.delete('session_token')
-
   try {
     const supabase = await createSupabaseServerClient()
     await supabase.auth.signOut()

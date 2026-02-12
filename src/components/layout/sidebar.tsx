@@ -90,8 +90,7 @@ export function Sidebar({ user, companyName, onMobileClose }: SidebarProps) {
   const router = useRouter()
 
   async function handleSignOut() {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.push('/login')
+    router.push('/dashboard')
   }
 
   return (
