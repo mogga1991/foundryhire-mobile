@@ -11,9 +11,27 @@ export interface ErrorContext {
   metadata?: Record<string, unknown>
 }
 
+interface SentryScope {
+  setTag: (key: string, value: string) => void
+  setExtras: (extras: Record<string, unknown>) => void
+}
+
+interface SentryLike {
+  init: (options: {
+    dsn: string
+    tracesSampleRate: number
+    environment?: string
+    release?: string
+  }) => void
+  withScope: (callback: (scope: SentryScope) => void) => void
+  captureException: (error: Error) => void
+  captureMessage: (message: string, level: 'info' | 'warning' | 'error') => void
+  setUser: (user: { id: string; email?: string }) => void
+  setTag: (key: string, value: string) => void
+}
+
 // Cache the Sentry module so we only attempt one dynamic import
-// @ts-ignore - Sentry is an optional dependency
-let sentryModule: typeof import('@sentry/nextjs') | null | undefined = undefined
+let sentryModule: SentryLike | null | undefined = undefined
 
 type DynamicImportFn = (modulePath: string) => Promise<unknown>
 
@@ -27,13 +45,12 @@ const runtimeImport: DynamicImportFn = new Function(
  * Attempt to load @sentry/nextjs dynamically.
  * Returns null if the package is not installed (graceful degradation).
  */
-// @ts-ignore - Sentry is an optional dependency
-async function getSentry(): Promise<typeof import('@sentry/nextjs') | null> {
+async function getSentry(): Promise<SentryLike | null> {
   if (sentryModule !== undefined) {
     return sentryModule
   }
   try {
-    sentryModule = await runtimeImport('@sentry/nextjs') as typeof import('@sentry/nextjs')
+    sentryModule = await runtimeImport('@sentry/nextjs') as SentryLike
     return sentryModule
   } catch {
     sentryModule = null
@@ -88,7 +105,7 @@ export function captureError(error: Error | unknown, context?: ErrorContext): vo
     .then((Sentry) => {
       if (!Sentry) return
 
-      Sentry.withScope((scope: any) => {
+      Sentry.withScope((scope: SentryScope) => {
         if (context?.userId) scope.setTag('userId', context.userId)
         if (context?.companyId) scope.setTag('companyId', context.companyId)
         if (context?.requestId) scope.setTag('requestId', context.requestId)
@@ -125,7 +142,7 @@ export function captureMessage(
     .then((Sentry) => {
       if (!Sentry) return
 
-      Sentry.withScope((scope: any) => {
+      Sentry.withScope((scope: SentryScope) => {
         if (context?.userId) scope.setTag('userId', context.userId)
         if (context?.companyId) scope.setTag('companyId', context.companyId)
         if (context?.requestId) scope.setTag('requestId', context.requestId)
