@@ -5,8 +5,6 @@ import { createLogger } from '@/lib/logger'
 const logger = createLogger('lib:auth:candidate-session')
 import { env } from '@/lib/env'
 
-const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET)
-
 export interface CandidateSession {
   candidateId: string
   email: string
@@ -18,6 +16,11 @@ export interface CandidateSession {
  */
 export async function getCandidateSession(): Promise<CandidateSession | null> {
   try {
+    if (!env.JWT_SECRET) {
+      logger.warn({ message: 'JWT_SECRET missing; candidate session verification disabled' })
+      return null
+    }
+
     const cookieStore = await cookies()
     const token = cookieStore.get('candidate_session_token')?.value
 
@@ -25,7 +28,8 @@ export async function getCandidateSession(): Promise<CandidateSession | null> {
       return null
     }
 
-    const { payload } = await jwtVerify(token, JWT_SECRET)
+    const jwtSecret = new TextEncoder().encode(env.JWT_SECRET)
+    const { payload } = await jwtVerify(token, jwtSecret)
 
     if (payload.type !== 'candidate') {
       return null

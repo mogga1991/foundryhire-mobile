@@ -16,9 +16,6 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 })
 
-// Get JWT secret from validated env
-const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET)
-
 export async function POST(req: NextRequest) {
   try {
     // Rate limiting
@@ -59,7 +56,16 @@ export async function POST(req: NextRequest) {
       .set({ lastLoginAt: new Date() })
       .where(eq(candidateUsers.id, user.id))
 
+    if (!env.JWT_SECRET) {
+      logger.error({ message: 'JWT_SECRET is not configured for candidate auth' })
+      return NextResponse.json(
+        { error: 'Candidate authentication is not configured' },
+        { status: 500 }
+      )
+    }
+
     // Create JWT token
+    const jwtSecret = new TextEncoder().encode(env.JWT_SECRET)
     const token = await new SignJWT({
       candidateId: user.id,
       email: user.email,
@@ -68,7 +74,7 @@ export async function POST(req: NextRequest) {
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('7d') // 7 days
-      .sign(JWT_SECRET)
+      .sign(jwtSecret)
 
     logger.info({ message: 'Candidate logged in successfully', candidateId: user.id, email: user.email })
 

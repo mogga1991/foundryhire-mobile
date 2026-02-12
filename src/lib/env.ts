@@ -2,20 +2,18 @@ import { z } from 'zod'
 
 /**
  * Environment variable validation schema
- * Only DATABASE_URL and JWT_SECRET are strictly required for the app to start.
- * Other variables are optional and enable specific features when provided.
+ * Variables are validated lazily at runtime.
+ * Optional values treat empty strings as "not set" to avoid failing on blank env entries.
  */
 const serverEnvSchema = z.object({
   // =============================================================================
-  // REQUIRED - App cannot start without these
+  // Core runtime
   // =============================================================================
   DATABASE_URL: z
     .string()
-    .min(1, 'DATABASE_URL is required')
-    .url('DATABASE_URL must be a valid URL'),
-  JWT_SECRET: z
-    .string()
-    .min(16, 'JWT_SECRET must be at least 16 characters for security'),
+    .url('DATABASE_URL must be a valid URL')
+    .optional(),
+  JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters for security').optional(),
 
   // =============================================================================
   // Core Settings - Optional with defaults
@@ -154,7 +152,15 @@ function getValidatedEnv(): EnvType {
     return process.env as unknown as EnvType
   }
 
-  const result = serverEnvSchema.safeParse(process.env)
+  // Normalize blank env values to undefined so optional vars don't fail validation
+  const normalizedEnv = Object.fromEntries(
+    Object.entries(process.env).map(([key, value]) => [
+      key,
+      typeof value === 'string' && value.trim() === '' ? undefined : value,
+    ])
+  )
+
+  const result = serverEnvSchema.safeParse(normalizedEnv)
 
   if (!result.success) {
     console.error('❌ Invalid environment variables:')
