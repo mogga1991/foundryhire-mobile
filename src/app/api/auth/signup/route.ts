@@ -84,6 +84,12 @@ async function _POST(request: NextRequest) {
     if (error instanceof SyntaxError) {
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
     }
+    if (error instanceof Error && error.message.includes('Supabase environment is not configured')) {
+      return NextResponse.json(
+        { error: 'Authentication is temporarily unavailable. Please contact support.' },
+        { status: 503 }
+      )
+    }
     logger.error({ message: 'Failed to create account', error })
     return NextResponse.json(
       { error: 'Failed to create account' },

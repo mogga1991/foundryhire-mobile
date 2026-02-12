@@ -38,6 +38,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(data.url)
   } catch (error) {
     logger.error({ error }, 'Google sign-in initiation failed')
+    if (error instanceof Error && error.message.includes('Supabase environment is not configured')) {
+      return NextResponse.redirect(new URL('/login?error=auth_not_configured', request.url))
+    }
     return NextResponse.redirect(new URL('/login?error=google_auth_failed', request.url))
   }
 }

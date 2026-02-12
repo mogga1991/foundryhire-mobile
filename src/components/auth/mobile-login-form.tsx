@@ -26,6 +26,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>
 
 const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  auth_not_configured: 'Authentication is not configured in this environment.',
   google_auth_failed: 'Google sign-in could not be started. Please try again.',
   oauth_denied: 'Google sign-in was canceled.',
   oauth_code_missing: 'Google sign-in returned an invalid response.',

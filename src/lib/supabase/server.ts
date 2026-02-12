@@ -2,16 +2,19 @@ import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { env } from '@/lib/env'
 
-function getSupabaseConfig() {
-  if (!env.NEXT_PUBLIC_SUPABASE_URL || !env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+export function getSupabaseConfig() {
+  const url = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL
+  const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY
+
+  if (!url || !anonKey) {
     throw new Error(
-      'Supabase environment is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.'
+      'Supabase environment is not configured. Set NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_URL/SUPABASE_ANON_KEY.'
     )
   }
 
   return {
-    url: env.NEXT_PUBLIC_SUPABASE_URL,
-    anonKey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    url,
+    anonKey,
   }
 }
 
@@ -36,4 +39,3 @@ export async function createSupabaseServerClient() {
     },
   })
 }
-

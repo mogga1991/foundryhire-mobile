@@ -37,12 +37,22 @@ export async function GET(request: NextRequest) {
     }
 
     // Build integration status
+    const primarySupabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL
+    const primarySupabaseAnonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const fallbackSupabaseUrl = env.SUPABASE_URL
+    const fallbackSupabaseAnonKey = env.SUPABASE_ANON_KEY
+
     const integrations = {
       auth: {
-        configured: !!(env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+        configured: !!(
+          (primarySupabaseUrl && primarySupabaseAnonKey) ||
+          (fallbackSupabaseUrl && fallbackSupabaseAnonKey)
+        ),
         services: {
-          supabaseUrl: !!env.NEXT_PUBLIC_SUPABASE_URL,
-          supabaseAnonKey: !!env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          supabaseUrl: !!primarySupabaseUrl,
+          supabaseAnonKey: !!primarySupabaseAnonKey,
+          supabaseUrlFallback: !!fallbackSupabaseUrl,
+          supabaseAnonKeyFallback: !!fallbackSupabaseAnonKey,
           supabaseServiceRole: !!env.SUPABASE_SERVICE_ROLE_KEY,
           appUrl: !!env.NEXT_PUBLIC_APP_URL,
         },

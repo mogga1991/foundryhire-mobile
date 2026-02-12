@@ -60,6 +60,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL(nextPath, request.url))
   } catch (error) {
     logger.error({ error }, 'OAuth callback failed')
+    if (error instanceof Error && error.message.includes('Supabase environment is not configured')) {
+      return NextResponse.redirect(new URL('/login?error=auth_not_configured', request.url))
+    }
     return NextResponse.redirect(new URL('/login?error=oauth_callback_failed', request.url))
   }
 }

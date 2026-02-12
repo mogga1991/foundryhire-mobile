@@ -52,6 +52,12 @@ export async function POST(request: NextRequest) {
     if (error instanceof SyntaxError) {
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
     }
+    if (error instanceof Error && error.message.includes('Supabase environment is not configured')) {
+      return NextResponse.json(
+        { error: 'Authentication is temporarily unavailable. Please contact support.' },
+        { status: 503 }
+      )
+    }
     logger.error({ error }, 'Login failed')
     return NextResponse.json(
       { error: 'Failed to sign in' },
