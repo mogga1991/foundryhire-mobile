@@ -1,23 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import bcrypt from 'bcryptjs'
-import { db } from '@/lib/db'
-import { candidateUsers } from '@/lib/db/schema'
-import { eq, and, gt } from 'drizzle-orm'
 import { createLogger } from '@/lib/logger'
 import { rateLimit, getIpIdentifier } from '@/lib/rate-limit'
-import { sanitizeUserInput } from '@/lib/security/sanitize'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 const logger = createLogger('candidate-auth-reset-password-confirm')
 
 const confirmResetSchema = z.object({
-  token: z.string().min(1, 'Token is required'),
+  accessToken: z.string().min(1, 'Access token is required'),
+  refreshToken: z.string().min(1, 'Refresh token is required'),
   newPassword: z.string().min(8, 'Password must be at least 8 characters'),
 })
 
 export async function POST(req: NextRequest) {
   try {
-    // Rate limiting - 5 requests per minute per IP
     const rateLimitResult = await rateLimit(req, {
       limit: 5,
       window: 60000,
@@ -29,45 +25,33 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const validatedData = confirmResetSchema.parse(body)
-    const sanitizedToken = sanitizeUserInput(validatedData.token, { maxLength: 100 })
 
-    logger.info({ message: 'Password reset confirmation attempted' })
+    const supabase = await createSupabaseServerClient()
 
-    // Find user with valid token
-    const [user] = await db
-      .select()
-      .from(candidateUsers)
-      .where(
-        and(
-          eq(candidateUsers.resetPasswordToken, sanitizedToken),
-          gt(candidateUsers.resetPasswordExpiry, new Date())
-        )
-      )
-      .limit(1)
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token: validatedData.accessToken,
+      refresh_token: validatedData.refreshToken,
+    })
 
-    if (!user) {
-      logger.warn({ message: 'Invalid or expired reset token' })
+    if (sessionError) {
+      logger.warn({ sessionError }, 'Invalid Supabase recovery session')
       return NextResponse.json(
-        { error: 'Invalid or expired reset token. Please request a new password reset.' },
+        { error: 'Invalid or expired password reset link. Please request another one.' },
         { status: 400 }
       )
     }
 
-    // Hash new password
-    const passwordHash = await bcrypt.hash(validatedData.newPassword, 12)
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: validatedData.newPassword,
+    })
 
-    // Update password and clear reset token
-    await db
-      .update(candidateUsers)
-      .set({
-        passwordHash,
-        resetPasswordToken: null,
-        resetPasswordExpiry: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(candidateUsers.id, user.id))
-
-    logger.info({ message: 'Password reset successful', candidateId: user.id, email: user.email })
+    if (updateError) {
+      logger.error({ updateError }, 'Failed to update password from recovery flow')
+      return NextResponse.json(
+        { error: 'Failed to reset password' },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({
       success: true,

@@ -13,6 +13,10 @@ function ResetPasswordContent() {
   const [mode, setMode] = useState<'request' | 'confirm'>(token ? 'confirm' : 'request')
   const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [recoverySession, setRecoverySession] = useState<{
+    accessToken: string
+    refreshToken: string
+  } | null>(null)
 
   // Request reset state
   const [email, setEmail] = useState('')
@@ -22,6 +26,20 @@ function ResetPasswordContent() {
   const [confirmPassword, setConfirmPassword] = useState('')
 
   useEffect(() => {
+    // Supabase recovery links provide tokens in the URL hash fragment.
+    const hash = typeof window !== 'undefined' ? window.location.hash : ''
+    if (hash.startsWith('#')) {
+      const hashParams = new URLSearchParams(hash.slice(1))
+      const accessToken = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token')
+      const type = hashParams.get('type')
+      if (accessToken && refreshToken && type === 'recovery') {
+        setRecoverySession({ accessToken, refreshToken })
+        setMode('confirm')
+      }
+    }
+
+    // Keep legacy query token support for already-sent links.
     if (token) {
       setMode('confirm')
     }
@@ -79,13 +97,18 @@ function ResetPasswordContent() {
     setIsLoading(true)
 
     try {
+      if (!recoverySession) {
+        throw new Error('Invalid or expired reset link. Please request a new one.')
+      }
+
       const response = await fetch('/api/candidate/auth/reset-password/confirm', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          token,
+          accessToken: recoverySession.accessToken,
+          refreshToken: recoverySession.refreshToken,
           newPassword,
         }),
       })

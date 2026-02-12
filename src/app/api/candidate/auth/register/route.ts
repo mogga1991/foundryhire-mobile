@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { candidateUsers } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { createLogger } from '@/lib/logger'
 import { rateLimit, RateLimitPresets } from '@/lib/rate-limit'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { syncCandidateUserFromSupabaseUser } from '@/lib/auth/candidate-session'
 
 const logger = createLogger('candidate-auth-register')
 
@@ -40,30 +41,70 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Hash password
-    const passwordHash = await bcrypt.hash(validatedData.password, 12)
+    const supabase = await createSupabaseServerClient()
+    const normalizedEmail = validatedData.email.toLowerCase().trim()
 
-    // Create candidate user
-    const [newUser] = await db.insert(candidateUsers).values({
-      firstName: validatedData.firstName,
-      lastName: validatedData.lastName,
-      email: validatedData.email.toLowerCase(),
-      passwordHash,
-      emailVerified: false,
-    }).returning()
+    const { data, error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password: validatedData.password,
+      options: {
+        data: {
+          first_name: validatedData.firstName.trim(),
+          last_name: validatedData.lastName.trim(),
+          full_name: `${validatedData.firstName.trim()} ${validatedData.lastName.trim()}`.trim(),
+          role: 'candidate',
+        },
+      },
+    })
 
-    logger.info({ candidateId: newUser.id, email: newUser.email }, 'Candidate user registered successfully')
+    if (error || !data.user) {
+      return NextResponse.json(
+        { error: error?.message || 'Failed to create account' },
+        { status: 400 }
+      )
+    }
 
-    // Return success (without password hash)
-    return NextResponse.json({
+    const synced = await syncCandidateUserFromSupabaseUser(data.user)
+    if (!synced) {
+      return NextResponse.json(
+        { error: 'Authenticated user is missing required profile information' },
+        { status: 400 }
+      )
+    }
+
+    const [newUser] = await db
+      .select()
+      .from(candidateUsers)
+      .where(eq(candidateUsers.id, synced.id))
+      .limit(1)
+
+    logger.info(
+      { candidateId: newUser?.id ?? synced.id, email: newUser?.email ?? normalizedEmail },
+      'Candidate user registered successfully'
+    )
+
+    const response = NextResponse.json({
       success: true,
       user: {
-        id: newUser.id,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName,
-        email: newUser.email,
+        id: newUser?.id ?? synced.id,
+        firstName: newUser?.firstName ?? validatedData.firstName.trim(),
+        lastName: newUser?.lastName ?? validatedData.lastName.trim(),
+        email: newUser?.email ?? normalizedEmail,
       },
+      emailConfirmationRequired: !data.session,
     }, { status: 201 })
+
+    if (data.session) {
+      response.cookies.set('candidate_session_token', '1', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7,
+        path: '/',
+      })
+    }
+
+    return response
 
   } catch (error) {
     if (error instanceof SyntaxError) {

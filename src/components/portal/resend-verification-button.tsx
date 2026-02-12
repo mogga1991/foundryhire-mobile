@@ -11,8 +11,13 @@ export function ResendVerificationButton() {
     setMessage('')
 
     try {
-      const response = await fetch('/api/auth/resend-verification', {
+      const email =
+        typeof window !== 'undefined' ? window.localStorage.getItem('candidate_email') : null
+
+      const response = await fetch('/api/candidate/auth/resend-verification', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email || '' }),
       })
 
       if (response.ok) {

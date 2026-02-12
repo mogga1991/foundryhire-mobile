@@ -108,6 +108,10 @@ export function CandidateRegisterForm() {
         description: 'Welcome to VerticalHire. Please check your email to verify your account.',
       })
 
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('candidate_email', data.email.toLowerCase().trim())
+      }
+
       router.push('/portal/verify-email')
     } catch (err) {
       if (process.env.NODE_ENV !== 'production') {

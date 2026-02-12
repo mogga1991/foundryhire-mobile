@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { candidateUsers } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { createLogger } from '@/lib/logger'
 import { rateLimit, RateLimitPresets } from '@/lib/rate-limit'
-import { SignJWT } from 'jose'
-import { env } from '@/lib/env'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { syncCandidateUserFromSupabaseUser } from '@/lib/auth/candidate-session'
 
 const logger = createLogger('candidate-auth-login')
 
@@ -27,73 +26,58 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const validatedData = loginSchema.parse(body)
 
-    // Find user by email
-    const [user] = await db.select()
-      .from(candidateUsers)
-      .where(eq(candidateUsers.email, validatedData.email.toLowerCase()))
-      .limit(1)
+    const supabase = await createSupabaseServerClient()
+    const normalizedEmail = validatedData.email.toLowerCase().trim()
 
-    if (!user) {
-      logger.warn({ message: 'Login attempt with non-existent email', email: validatedData.email })
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password: validatedData.password,
+    })
+
+    if (error || !data.user) {
+      logger.warn({ message: 'Invalid candidate credentials', email: normalizedEmail })
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
       )
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(validatedData.password, user.passwordHash)
-    if (!isValidPassword) {
-      logger.warn({ message: 'Login attempt with invalid password', candidateId: user.id, email: user.email })
+    const synced = await syncCandidateUserFromSupabaseUser(data.user)
+    if (!synced) {
       return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
+        { error: 'Authenticated user is missing required profile information' },
+        { status: 400 }
       )
     }
 
-    // Update last login
+    // Update last login timestamp in Neon profile row.
     await db.update(candidateUsers)
       .set({ lastLoginAt: new Date() })
-      .where(eq(candidateUsers.id, user.id))
+      .where(eq(candidateUsers.id, synced.id))
 
-    if (!env.JWT_SECRET) {
-      logger.error({ message: 'JWT_SECRET is not configured for candidate auth' })
-      return NextResponse.json(
-        { error: 'Candidate authentication is not configured' },
-        { status: 500 }
-      )
-    }
+    const [user] = await db.select()
+      .from(candidateUsers)
+      .where(eq(candidateUsers.id, synced.id))
+      .limit(1)
 
-    // Create JWT token
-    const jwtSecret = new TextEncoder().encode(env.JWT_SECRET)
-    const token = await new SignJWT({
-      candidateId: user.id,
-      email: user.email,
-      type: 'candidate',
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime('7d') // 7 days
-      .sign(jwtSecret)
-
-    logger.info({ message: 'Candidate logged in successfully', candidateId: user.id, email: user.email })
+    logger.info({ message: 'Candidate logged in successfully', candidateId: synced.id, email: synced.email })
 
     // Create response with session cookie
     const response = NextResponse.json({
       success: true,
       user: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        emailVerified: user.emailVerified,
+        id: user?.id ?? synced.id,
+        firstName: user?.firstName ?? '',
+        lastName: user?.lastName ?? '',
+        email: user?.email ?? synced.email,
+        emailVerified: user?.emailVerified ?? Boolean(data.user.email_confirmed_at),
       },
     })
 
-    // Set httpOnly cookie
-    response.cookies.set('candidate_session_token', token, {
+    // Lightweight candidate marker cookie for middleware route gating.
+    response.cookies.set('candidate_session_token', '1', {
       httpOnly: true,
-      secure: env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: '/',

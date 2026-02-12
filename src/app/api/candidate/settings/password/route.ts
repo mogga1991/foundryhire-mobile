@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit, getIpIdentifier } from '@/lib/rate-limit'
 import { z } from 'zod'
-import bcrypt from 'bcryptjs'
-import { db } from '@/lib/db'
-import { candidateUsers } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
 import { getCandidateSession } from '@/lib/auth/candidate-session'
 import { createLogger } from '@/lib/logger'
 import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 const logger = createLogger('candidate-password-change')
 
@@ -42,26 +39,14 @@ async function _POST(req: NextRequest) {
     const body = await req.json()
     const validatedData = passwordChangeSchema.parse(body)
 
-    // Get current user
-    const [user] = await db.select()
-      .from(candidateUsers)
-      .where(eq(candidateUsers.id, session.candidateId))
-      .limit(1)
+    const supabase = await createSupabaseServerClient()
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      )
-    }
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email: session.email,
+      password: validatedData.currentPassword,
+    })
 
-    // Verify current password
-    const isValidPassword = await bcrypt.compare(
-      validatedData.currentPassword,
-      user.passwordHash
-    )
-
-    if (!isValidPassword) {
+    if (reauthError) {
       logger.warn({ candidateId: session.candidateId }, 'Invalid current password attempt')
       return NextResponse.json(
         { error: 'Current password is incorrect' },
@@ -69,16 +54,17 @@ async function _POST(req: NextRequest) {
       )
     }
 
-    // Hash new password
-    const newPasswordHash = await bcrypt.hash(validatedData.newPassword, 12)
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: validatedData.newPassword,
+    })
 
-    // Update password
-    await db.update(candidateUsers)
-      .set({
-        passwordHash: newPasswordHash,
-        updatedAt: new Date(),
-      })
-      .where(eq(candidateUsers.id, session.candidateId))
+    if (updateError) {
+      logger.error({ candidateId: session.candidateId, updateError }, 'Failed to update candidate password')
+      return NextResponse.json(
+        { error: 'Failed to change password' },
+        { status: 500 }
+      )
+    }
 
     logger.info({ candidateId: session.candidateId }, 'Password changed successfully')
 

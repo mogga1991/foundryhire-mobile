@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { createLogger } from '@/lib/logger'
 import { rateLimit, getIpIdentifier } from '@/lib/rate-limit'
 import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 const logger = createLogger('api:candidate:auth:logout')
 
@@ -17,7 +18,14 @@ async function _POST(request: NextRequest) {
 
     const cookieStore = await cookies()
 
-    // Delete the candidate session cookie
+    try {
+      const supabase = await createSupabaseServerClient()
+      await supabase.auth.signOut()
+    } catch (error) {
+      logger.warn({ message: 'Supabase candidate sign-out failed', error })
+    }
+
+    // Delete legacy/portal marker cookie
     cookieStore.delete('candidate_session_token')
 
     return NextResponse.json({

@@ -45,6 +45,12 @@ function hasEmployerSessionCookie(request: NextRequest): boolean {
     .some((cookie) => cookie.name.startsWith('sb-') && cookie.name.includes('-auth-token'))
 }
 
+function hasSupabaseSessionCookie(request: NextRequest): boolean {
+  return request.cookies
+    .getAll()
+    .some((cookie) => cookie.name.startsWith('sb-') && cookie.name.includes('-auth-token'))
+}
+
 function isPublicCandidatePortalPath(pathname: string): boolean {
   // Candidate interview links are single-segment tokens, e.g. /portal/<token>.
   // Keep nested portal routes protected by candidate auth.
@@ -131,6 +137,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const hasEmployerSession = hasEmployerSessionCookie(request)
   const candidateSessionToken = request.cookies.get('candidate_session_token')?.value
+  const hasCandidateSession = !!candidateSessionToken || hasSupabaseSessionCookie(request)
 
   // CSRF Protection for API routes (defense-in-depth)
   // This is middleware-level CSRF validation; routes also use withApiMiddleware for additional protection
@@ -150,7 +157,7 @@ export function proxy(request: NextRequest) {
   }
   // Portal routes require candidate session
   else if (pathname.startsWith('/portal/') || pathname === '/portal') {
-    if (!candidateSessionToken) {
+    if (!hasCandidateSession) {
       const loginUrl = new URL('/portal/login', request.url)
       response = NextResponse.redirect(loginUrl)
     } else {

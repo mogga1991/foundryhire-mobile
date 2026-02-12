@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import crypto from 'crypto'
-import { db } from '@/lib/db'
-import { candidateUsers } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
 import { createLogger } from '@/lib/logger'
 import { rateLimit, getIpIdentifier } from '@/lib/rate-limit'
 import { sanitizeEmail } from '@/lib/security/sanitize'
-import { Resend } from 'resend'
 import { env } from '@/lib/env'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 const logger = createLogger('candidate-auth-reset-password')
 
@@ -34,83 +30,14 @@ export async function POST(req: NextRequest) {
 
     logger.info({ message: 'Password reset requested', email: sanitizedEmail })
 
-    // Look up user
-    const [user] = await db
-      .select()
-      .from(candidateUsers)
-      .where(eq(candidateUsers.email, sanitizedEmail))
-      .limit(1)
+    const supabase = await createSupabaseServerClient()
+    const appUrl = env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const { error } = await supabase.auth.resetPasswordForEmail(sanitizedEmail, {
+      redirectTo: `${appUrl}/portal/reset-password`,
+    })
 
-    // Always return success to prevent email enumeration
-    if (!user) {
-      logger.info({ message: 'Password reset requested for non-existent email', email: sanitizedEmail })
-      return NextResponse.json({
-        success: true,
-        message: 'If an account with that email exists, a reset link has been sent.',
-      })
-    }
-
-    // Generate secure reset token
-    const resetToken = crypto.randomBytes(32).toString('hex')
-    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
-
-    // Store token in database
-    await db
-      .update(candidateUsers)
-      .set({
-        resetPasswordToken: resetToken,
-        resetPasswordExpiry: resetTokenExpiry,
-        updatedAt: new Date(),
-      })
-      .where(eq(candidateUsers.id, user.id))
-
-    // Send reset email via Resend
-    if (env.RESEND_API_KEY) {
-      try {
-        const resend = new Resend(env.RESEND_API_KEY)
-        const resetUrl = `${env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/portal/reset-password?token=${resetToken}`
-
-        await resend.emails.send({
-          from: env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
-          to: user.email,
-          subject: 'Reset Your Password - VerticalHire',
-          html: `
-            <!DOCTYPE html>
-            <html>
-              <head>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              </head>
-              <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
-                  <h1 style="color: white; margin: 0; font-size: 24px;">Reset Your Password</h1>
-                </div>
-                <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
-                  <p style="margin: 0 0 20px;">Hi ${user.firstName},</p>
-                  <p style="margin: 0 0 20px;">We received a request to reset your password for your VerticalHire candidate account.</p>
-                  <p style="margin: 0 0 20px;">Click the button below to create a new password:</p>
-                  <div style="text-align: center; margin: 30px 0;">
-                    <a href="${resetUrl}" style="background: #f97316; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">Reset Password</a>
-                  </div>
-                  <p style="margin: 0 0 10px; font-size: 14px; color: #6b7280;">Or copy and paste this link into your browser:</p>
-                  <p style="margin: 0 0 20px; font-size: 14px; color: #6b7280; word-break: break-all;">${resetUrl}</p>
-                  <p style="margin: 0 0 20px; font-size: 14px; color: #6b7280;">This link will expire in 1 hour.</p>
-                  <p style="margin: 0 0 20px; font-size: 14px; color: #6b7280;">If you didn't request this password reset, you can safely ignore this email. Your password will not be changed.</p>
-                  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-                  <p style="margin: 0; font-size: 12px; color: #9ca3af; text-align: center;">VerticalHire - Candidate Portal</p>
-                </div>
-              </body>
-            </html>
-          `,
-        })
-
-        logger.info({ message: 'Password reset email sent', candidateId: user.id, email: user.email })
-      } catch (emailError) {
-        logger.error({ message: 'Failed to send password reset email', error: emailError, candidateId: user.id })
-        // Don't fail the request if email fails
-      }
-    } else {
-      logger.warn({ message: 'RESEND_API_KEY not configured, password reset email not sent' })
+    if (error) {
+      logger.error({ message: 'Supabase password reset request failed', error, email: sanitizedEmail })
     }
 
     return NextResponse.json({
