@@ -118,6 +118,7 @@ export function withApiMiddleware(
  * - Webhook routes (/api/webhooks/*)
  * - Auth routes (/api/auth/*)
  * - Candidate portal routes with Bearer token auth (/api/portal/*)
+ * - Candidate interview token routes (/api/interviews/candidate/*)
  * - CSRF token endpoint itself (/api/csrf)
  */
 function shouldSkipCsrfValidation(path: string): boolean {
@@ -125,6 +126,7 @@ function shouldSkipCsrfValidation(path: string): boolean {
     /^\/api\/webhooks\//,
     /^\/api\/auth\//,
     /^\/api\/portal\//,
+    /^\/api\/interviews\/candidate\//,
     /^\/api\/csrf$/,
   ]
 

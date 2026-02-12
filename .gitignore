@@ -45,6 +45,7 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /e2e/screenshots/
+/tests/screenshots/
 
 # sensitive files
 service-account-key.json

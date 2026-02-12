@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { LogOut, User, Settings, ChevronDown, Bell } from 'lucide-react'
+import { LogOut, User, Settings, ChevronDown, Bell, FileText, Calendar, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -142,6 +142,42 @@ export function CandidateNav({ user }: CandidateNavProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Link
+            href="/portal/dashboard"
+            className="rounded-full bg-orange-700/70 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700"
+          >
+            Workspace
+          </Link>
+          <Link
+            href="/portal/interviews"
+            className="inline-flex items-center gap-1 rounded-full bg-orange-700/40 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700/60"
+          >
+            <Calendar className="h-3.5 w-3.5" />
+            Interviews
+          </Link>
+          <Link
+            href="/portal/documents"
+            className="inline-flex items-center gap-1 rounded-full bg-orange-700/40 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700/60"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Documents
+          </Link>
+          <Link
+            href="/portal/offers"
+            className="inline-flex items-center gap-1 rounded-full bg-orange-700/40 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700/60"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Offers
+          </Link>
+          <Link
+            href="/portal/onboarding"
+            className="rounded-full bg-orange-700/40 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700/60"
+          >
+            Onboarding
+          </Link>
         </div>
       </nav>
     </header>

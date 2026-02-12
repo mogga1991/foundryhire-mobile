@@ -1,15 +1,27 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { Briefcase, Calendar, Clock, User } from 'lucide-react'
+import {
+  ArrowRight,
+  Briefcase,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Mail,
+  ShieldCheck,
+} from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { getCandidateUser } from '@/lib/auth/get-candidate-user'
 import { CandidateNav } from '@/components/candidate/candidate-nav'
+import { getCandidateWorkspaceData } from '@/lib/services/candidate-workspace'
 
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'Dashboard - VerticalHire Candidate',
-  description: 'View your job applications and opportunities',
+  title: 'Workspace - VerticalHire Candidate',
+  description: 'Manage your active interview workspaces, documents, offers, and onboarding tasks',
 }
 
 export default async function CandidateDashboardPage() {
@@ -19,235 +31,241 @@ export default async function CandidateDashboardPage() {
     redirect('/portal/login')
   }
 
+  const workspace = await getCandidateWorkspaceData({
+    candidateUserId: user.id,
+    candidateEmail: user.email,
+  })
+
+  const activeCount = workspace.opportunities.filter((item) => item.lifecycleStatus !== 'expired').length
+  const interviewingCount = workspace.opportunities.filter((item) => item.lifecycleStatus === 'interviewing').length
+  const offeredCount = workspace.opportunities.filter((item) => item.lifecycleStatus === 'offered').length
+
   return (
     <>
       <CandidateNav user={user} />
 
-      {/* Main Content */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Message */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900">
-            Welcome back, {user.firstName}! 👋
+            Candidate Workspace
           </h2>
           <p className="text-gray-600 mt-2">
-            Here's an overview of your construction career opportunities
+            Invitation-only access for interviews, documents, offers, and onboarding.
           </p>
         </div>
-        {/* Stats Cards */}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card className="border-orange-200 shadow-md hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Profile Completeness
-              </CardTitle>
-              <User className="h-4 w-4 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">
-                {(() => {
-                  let completed = 2 // firstName and lastName always exist
-                  if (user.phone) completed++
-                  if (user.location) completed++
-                  if (user.currentTitle) completed++
-                  if (user.currentCompany) completed++
-                  if (user.experienceYears) completed++
-                  if (user.linkedinUrl) completed++
-                  if (user.bio) completed++
-                  if (user.skills && user.skills.length > 0) completed++
-                  if (user.resumeUrl) completed++
-                  const percentage = Math.round((completed / 11) * 100)
-                  return `${percentage}%`
-                })()}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {user.resumeUrl ? 'Resume uploaded' : 'Add resume to improve'}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-orange-200 shadow-md hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Employer Reach-outs
+                Active Workspaces
               </CardTitle>
               <Briefcase className="h-4 w-4 text-orange-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">0</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                No invitations yet
-              </p>
+              <div className="text-2xl font-bold text-orange-600">{activeCount}</div>
+              <p className="text-xs text-muted-foreground mt-1">Across all companies and roles</p>
             </CardContent>
           </Card>
 
           <Card className="border-orange-200 shadow-md hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Interviews Scheduled
+                Interviewing
               </CardTitle>
               <Calendar className="h-4 w-4 text-orange-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">0</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                No interviews scheduled
-              </p>
+              <div className="text-2xl font-bold text-orange-600">{interviewingCount}</div>
+              <p className="text-xs text-muted-foreground mt-1">Confirmed or in-progress interviews</p>
             </CardContent>
           </Card>
 
           <Card className="border-orange-200 shadow-md hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Experience
+                Offers
               </CardTitle>
-              <Clock className="h-4 w-4 text-orange-600" />
+              <CheckCircle2 className="h-4 w-4 text-orange-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">
-                {user.experienceYears || 0} yrs
-              </div>
+              <div className="text-2xl font-bold text-orange-600">{offeredCount}</div>
+              <p className="text-xs text-muted-foreground mt-1">Review and accept before expiry</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-orange-200 shadow-md hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Unread Messages
+              </CardTitle>
+              <Mail className="h-4 w-4 text-orange-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">{workspace.unreadReachOutCount}</div>
               <p className="text-xs text-muted-foreground mt-1">
-                {user.currentTitle || 'Update your profile'}
+                {workspace.totalReachOutCount} total employer reach-outs
               </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Getting Started / Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="border-orange-200 shadow-md">
             <CardHeader>
-              <CardTitle className="text-orange-900">Complete Your Profile</CardTitle>
-              <CardDescription>Stand out to employers by completing your profile</CardDescription>
+              <CardTitle className="text-orange-900">Next Actions</CardTitle>
+              <CardDescription>Fast path to keep your opportunity moving</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {!user.resumeUrl && (
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-orange-50 border border-orange-200">
-                    <Briefcase className="h-5 w-5 text-orange-600 mt-0.5" />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-sm text-orange-900">Upload Your Resume</h4>
-                      <p className="text-xs text-muted-foreground">Let employers see your experience</p>
-                    </div>
+                <Link
+                  href="/portal/interviews"
+                  className="flex items-center justify-between p-3 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition"
+                >
+                  <div>
+                    <h4 className="font-semibold text-sm text-orange-900">Join Interviews</h4>
+                    <p className="text-xs text-muted-foreground">Access your live and upcoming interviews</p>
                   </div>
-                )}
+                  <ArrowRight className="h-4 w-4 text-orange-700" />
+                </Link>
 
-                {!user.bio && (
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-orange-50 border border-orange-200">
-                    <User className="h-5 w-5 text-orange-600 mt-0.5" />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-sm text-orange-900">Add a Professional Bio</h4>
-                      <p className="text-xs text-muted-foreground">Describe your experience and specialties</p>
-                    </div>
+                <Link
+                  href="/portal/documents"
+                  className="flex items-center justify-between p-3 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition"
+                >
+                  <div>
+                    <h4 className="font-semibold text-sm text-orange-900">Upload Required Documents</h4>
+                    <p className="text-xs text-muted-foreground">Resume, licenses, and role-specific files</p>
                   </div>
-                )}
+                  <ArrowRight className="h-4 w-4 text-orange-700" />
+                </Link>
 
-                {(!user.skills || user.skills.length === 0) && (
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-orange-50 border border-orange-200">
-                    <Briefcase className="h-5 w-5 text-orange-600 mt-0.5" />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-sm text-orange-900">List Your Skills</h4>
-                      <p className="text-xs text-muted-foreground">Help employers find you for the right roles</p>
-                    </div>
+                <Link
+                  href="/portal/offers"
+                  className="flex items-center justify-between p-3 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition"
+                >
+                  <div>
+                    <h4 className="font-semibold text-sm text-orange-900">Review Offers</h4>
+                    <p className="text-xs text-muted-foreground">Track countdown and accept before expiration</p>
                   </div>
-                )}
+                  <ArrowRight className="h-4 w-4 text-orange-700" />
+                </Link>
 
-                {!user.currentTitle && (
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-orange-50 border border-orange-200">
-                    <Briefcase className="h-5 w-5 text-orange-600 mt-0.5" />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-sm text-orange-900">Add Your Current Role</h4>
-                      <p className="text-xs text-muted-foreground">Show your current position and company</p>
-                    </div>
+                <Link
+                  href="/portal/onboarding"
+                  className="flex items-center justify-between p-3 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition"
+                >
+                  <div>
+                    <h4 className="font-semibold text-sm text-orange-900">Complete Onboarding</h4>
+                    <p className="text-xs text-muted-foreground">Submit required forms and final docs</p>
                   </div>
-                )}
-
-                {user.resumeUrl && user.bio && user.skills && user.skills.length > 0 && user.currentTitle && (
-                  <div className="text-center py-8">
-                    <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mb-4">
-                      <svg
-                        className="h-8 w-8 text-green-600"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    </div>
-                    <h4 className="font-semibold text-orange-900">Profile Complete!</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      You're all set. Employers can now discover your profile.
-                    </p>
-                  </div>
-                )}
+                  <ArrowRight className="h-4 w-4 text-orange-700" />
+                </Link>
               </div>
             </CardContent>
           </Card>
 
           <Card className="border-orange-200 shadow-md">
             <CardHeader>
-              <CardTitle className="text-orange-900">How It Works</CardTitle>
-              <CardDescription>Your path to construction opportunities</CardDescription>
+              <CardTitle className="text-orange-900">Current Opportunities</CardTitle>
+              <CardDescription>Temporary, invitation-only workspaces</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-orange-600 font-semibold text-sm flex-shrink-0">
-                    1
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-sm text-gray-900">Complete Your Profile</h4>
+              <div className="space-y-3">
+                {workspace.opportunities.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-orange-300 bg-orange-50 p-4">
+                    <p className="text-sm text-orange-900 font-medium">No active opportunities yet.</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Add your experience, skills, and resume to help employers find you
+                      You will see invites and interviews here as soon as an employer reaches out.
                     </p>
                   </div>
-                </div>
+                )}
 
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-orange-600 font-semibold text-sm flex-shrink-0">
-                    2
+                {workspace.opportunities.slice(0, 4).map((item) => (
+                  <div key={item.interviewId} className="rounded-lg border border-orange-200 p-3 bg-white">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {item.companyName} {item.jobTitle ? `• ${item.jobTitle}` : ''}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {item.scheduledAt ? new Date(item.scheduledAt).toLocaleString() : 'Schedule pending'}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="capitalize">
+                        {item.lifecycleStatus.replace('_', ' ')}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                      {item.aiScore !== null && (
+                        <span className="inline-flex items-center gap-1">
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          Match score: {item.aiScore}
+                        </span>
+                      )}
+                      {item.expiresAt && (
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5" />
+                          Expires: {new Date(item.expiresAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    {item.portalToken && (
+                      <div className="mt-3">
+                        <Link
+                          href={`/portal/${item.portalToken}`}
+                          className="inline-flex items-center text-xs font-medium text-orange-700 hover:text-orange-800"
+                        >
+                          Open workspace
+                          <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                        </Link>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-sm text-gray-900">Get Discovered</h4>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Employers search for candidates and review profiles that match their needs
-                    </p>
-                  </div>
-                </div>
+                ))}
 
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-orange-600 font-semibold text-sm flex-shrink-0">
-                    3
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-sm text-gray-900">Receive Invitations</h4>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Employers will reach out directly with job opportunities
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-orange-600 font-semibold text-sm flex-shrink-0">
-                    4
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-sm text-gray-900">Start Interviewing</h4>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Connect with employers and schedule interviews for positions you're interested in
-                    </p>
-                  </div>
+                <div className="pt-2">
+                  <Link
+                    href="/portal/interviews"
+                    className="inline-flex items-center gap-2 text-sm font-medium text-orange-700 hover:text-orange-800"
+                  >
+                    View all opportunities
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
+
+        <Card className="border-orange-200 shadow-md mt-6">
+          <CardHeader>
+            <CardTitle className="text-orange-900">How This Candidate Workspace Works</CardTitle>
+            <CardDescription>Simple, secure, and time-boxed by design</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-lg bg-orange-50 border border-orange-200 p-4">
+                <h4 className="font-semibold text-sm text-orange-900">Invitation-Only</h4>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Employers invite candidates directly after sourcing and qualification.
+                </p>
+              </div>
+              <div className="rounded-lg bg-orange-50 border border-orange-200 p-4">
+                <h4 className="font-semibold text-sm text-orange-900">Action Focused</h4>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Interviews, documents, offers, and onboarding tasks are centralized in one place.
+                </p>
+              </div>
+              <div className="rounded-lg bg-orange-50 border border-orange-200 p-4">
+                <h4 className="font-semibold text-sm text-orange-900">Time-Bound Access</h4>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Workspaces expire automatically based on interview and offer lifecycle rules.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </section>
     </>
   )

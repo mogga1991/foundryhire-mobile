@@ -124,7 +124,7 @@ export default function CandidatePortalPage() {
 
     setIsConfirming(true)
     try {
-      const res = await fetch(`/api/interviews/candidate/${token}/confirm`, {
+      const res = await fetch(`/api/interviews/candidate/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ timeSlotId: selectedTimeSlot }),

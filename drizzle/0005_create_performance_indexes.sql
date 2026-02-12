@@ -31,12 +31,11 @@ CREATE INDEX IF NOT EXISTS idx_interviews_job_scheduled
 CREATE INDEX IF NOT EXISTS idx_interviews_upcoming
   ON interviews (company_id, scheduled_at)
   WHERE status IN ('scheduled', 'confirmed')
-  AND scheduled_at > NOW();
+  AND scheduled_at IS NOT NULL;
 
 -- Index for recording status queries (for processing pipelines)
 CREATE INDEX IF NOT EXISTS idx_interviews_recording_processing
-  ON interviews (recording_status, scheduled_at)
-  WHERE recording_status IN ('in_progress', 'processing');
+  ON interviews (scheduled_at DESC);
 
 -- =============================================================================
 -- Candidates Table Indexes
@@ -98,7 +97,7 @@ CREATE INDEX IF NOT EXISTS idx_campaign_sends_candidate
 
 -- Partial index for pending sends (queue processing)
 CREATE INDEX IF NOT EXISTS idx_campaign_sends_pending
-  ON campaign_sends (campaign_id, next_attempt_at)
+  ON campaign_sends (campaign_id, created_at)
   WHERE status = 'pending';
 
 -- Index for tracking events (opens, clicks)
@@ -137,8 +136,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_company_status_published
 -- Partial index for open positions only
 CREATE INDEX IF NOT EXISTS idx_jobs_open
   ON jobs (company_id, published_at DESC)
-  WHERE status = 'published'
-  AND (closes_at IS NULL OR closes_at > NOW());
+  WHERE status = 'published';
 
 -- =============================================================================
 -- Email Queue Table Indexes (for send optimization)

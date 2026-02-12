@@ -8,6 +8,141 @@ import path from 'path'
 
 const logger = createLogger('migration-runner')
 
+function isAlreadyAppliedError(message: string): boolean {
+  const normalized = message.toLowerCase()
+  const indicators = [
+    'already exists',
+    'duplicate key value violates unique constraint',
+    'is duplicated',
+  ]
+
+  return indicators.some((indicator) => normalized.includes(indicator))
+}
+
+function splitSqlStatements(sqlText: string): string[] {
+  const statements: string[] = []
+  let buffer = ''
+  let i = 0
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  let inLineComment = false
+  let inBlockComment = false
+  let dollarTag: string | null = null
+
+  while (i < sqlText.length) {
+    const ch = sqlText[i]
+    const next = sqlText[i + 1]
+
+    if (inLineComment) {
+      buffer += ch
+      if (ch === '\n') inLineComment = false
+      i++
+      continue
+    }
+
+    if (inBlockComment) {
+      buffer += ch
+      if (ch === '*' && next === '/') {
+        buffer += next
+        i += 2
+        inBlockComment = false
+      } else {
+        i++
+      }
+      continue
+    }
+
+    if (dollarTag) {
+      if (sqlText.startsWith(dollarTag, i)) {
+        buffer += dollarTag
+        i += dollarTag.length
+        dollarTag = null
+        continue
+      }
+      buffer += ch
+      i++
+      continue
+    }
+
+    if (inSingleQuote) {
+      buffer += ch
+      if (ch === '\'' && next === '\'') {
+        buffer += next
+        i += 2
+        continue
+      }
+      if (ch === '\'') inSingleQuote = false
+      i++
+      continue
+    }
+
+    if (inDoubleQuote) {
+      buffer += ch
+      if (ch === '"') inDoubleQuote = false
+      i++
+      continue
+    }
+
+    if (ch === '-' && next === '-') {
+      buffer += ch + next
+      i += 2
+      inLineComment = true
+      continue
+    }
+
+    if (ch === '/' && next === '*') {
+      buffer += ch + next
+      i += 2
+      inBlockComment = true
+      continue
+    }
+
+    if (ch === '\'') {
+      inSingleQuote = true
+      buffer += ch
+      i++
+      continue
+    }
+
+    if (ch === '"') {
+      inDoubleQuote = true
+      buffer += ch
+      i++
+      continue
+    }
+
+    if (ch === '$') {
+      const match = sqlText.slice(i).match(/^\$[A-Za-z_0-9]*\$/)
+      if (match) {
+        dollarTag = match[0]
+        buffer += dollarTag
+        i += dollarTag.length
+        continue
+      }
+    }
+
+    if (ch === ';') {
+      const statement = buffer.trim()
+      if (statement.length > 0) {
+        statements.push(statement)
+      }
+      buffer = ''
+      i++
+      continue
+    }
+
+    buffer += ch
+    i++
+  }
+
+  const tail = buffer.trim()
+  if (tail.length > 0) {
+    statements.push(tail)
+  }
+
+  return statements
+}
+
 /**
  * POST /api/admin/run-migrations
  *
@@ -119,16 +254,18 @@ export async function POST(request: NextRequest) {
       const migrationStart = Date.now()
 
       try {
-        // Execute the migration SQL
-        // Split by Drizzle's statement-breakpoint comments for multi-statement migrations
-        const statements = migrationSql
-          .split('--> statement-breakpoint')
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0)
+        // Execute migration SQL one statement at a time.
+        // Prefer Drizzle breakpoints when present; otherwise split safely.
+        const statements = migrationSql.includes('--> statement-breakpoint')
+          ? migrationSql
+              .split('--> statement-breakpoint')
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0)
+          : splitSqlStatements(migrationSql)
 
         for (const statement of statements) {
-          // Use unsafe query execution for migration statements
-          await sql([statement] as any)
+          // Execute raw migration SQL statements (Neon requires sql.query for plain strings)
+          await sql.query(statement)
         }
 
         const executionTimeMs = Date.now() - migrationStart
@@ -151,6 +288,27 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         const executionTimeMs = Date.now() - migrationStart
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+
+        // Handle schema drift safely: migration objects may already exist even if _migrations is empty.
+        if (isAlreadyAppliedError(errorMessage)) {
+          await sql`
+            INSERT INTO _migrations (filename, checksum, execution_time_ms)
+            VALUES (${filename}, ${checksum}, ${executionTimeMs})
+            ON CONFLICT (filename) DO NOTHING
+          `
+
+          results.push({ filename, status: 'skipped', executionTimeMs })
+          skipped++
+
+          logger.warn({
+            message: 'Migration already applied; marked as skipped',
+            filename,
+            error: errorMessage,
+            executionTimeMs,
+          })
+
+          continue
+        }
 
         results.push({
           filename,

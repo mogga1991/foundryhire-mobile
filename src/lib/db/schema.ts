@@ -504,6 +504,52 @@ export const candidateReachOuts = pgTable('candidate_reach_outs', {
   index('candidate_reach_outs_employer_idx').on(table.employerId),
 ])
 
+export const candidateDocuments = pgTable('candidate_documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  candidateUserId: uuid('candidate_user_id').notNull().references(() => candidateUsers.id, { onDelete: 'cascade' }),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
+  candidateRecordId: uuid('candidate_record_id').references(() => candidates.id, { onDelete: 'set null' }),
+  interviewId: uuid('interview_id'),
+  documentType: text('document_type').notNull(), // resume, license, certification, work_auth, portfolio, additional
+  fileName: text('file_name').notNull(),
+  fileUrl: text('file_url').notNull(),
+  fileMimeType: text('file_mime_type'),
+  fileSizeBytes: integer('file_size_bytes'),
+  required: boolean('required').notNull().default(false),
+  status: text('status').notNull().default('uploaded'), // uploaded, under_review, accepted, rejected
+  score: integer('score'), // 0-100
+  insights: jsonb('insights'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('candidate_documents_candidate_user_idx').on(table.candidateUserId),
+  index('candidate_documents_company_idx').on(table.companyId),
+  index('candidate_documents_document_type_idx').on(table.documentType),
+])
+
+export const candidateOnboardingTasks = pgTable('candidate_onboarding_tasks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  candidateUserId: uuid('candidate_user_id').notNull().references(() => candidateUsers.id, { onDelete: 'cascade' }),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
+  candidateRecordId: uuid('candidate_record_id').references(() => candidates.id, { onDelete: 'set null' }),
+  interviewId: uuid('interview_id'),
+  title: text('title').notNull(),
+  description: text('description'),
+  taskType: text('task_type').notNull().default('form'), // form, document, checklist
+  required: boolean('required').notNull().default(true),
+  status: text('status').notNull().default('pending'), // pending, completed
+  documentType: text('document_type'),
+  dueAt: timestamp('due_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('candidate_onboarding_tasks_candidate_user_idx').on(table.candidateUserId),
+  index('candidate_onboarding_tasks_status_idx').on(table.status),
+  index('candidate_onboarding_tasks_due_at_idx').on(table.dueAt),
+])
+
 export const campaignFollowUps = pgTable('campaign_follow_ups', {
   id: uuid('id').defaultRandom().primaryKey(),
   campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
@@ -849,6 +895,20 @@ export const emailSuppressionsRelations = relations(emailSuppressions, ({ one })
 
 export const campaignFollowUpsRelations = relations(campaignFollowUps, ({ one }) => ({
   campaign: one(campaigns, { fields: [campaignFollowUps.campaignId], references: [campaigns.id] }),
+}))
+
+export const candidateDocumentsRelations = relations(candidateDocuments, ({ one }) => ({
+  candidateUser: one(candidateUsers, { fields: [candidateDocuments.candidateUserId], references: [candidateUsers.id] }),
+  company: one(companies, { fields: [candidateDocuments.companyId], references: [companies.id] }),
+  candidateRecord: one(candidates, { fields: [candidateDocuments.candidateRecordId], references: [candidates.id] }),
+  interview: one(interviews, { fields: [candidateDocuments.interviewId], references: [interviews.id] }),
+}))
+
+export const candidateOnboardingTasksRelations = relations(candidateOnboardingTasks, ({ one }) => ({
+  candidateUser: one(candidateUsers, { fields: [candidateOnboardingTasks.candidateUserId], references: [candidateUsers.id] }),
+  company: one(companies, { fields: [candidateOnboardingTasks.companyId], references: [companies.id] }),
+  candidateRecord: one(candidates, { fields: [candidateOnboardingTasks.candidateRecordId], references: [candidates.id] }),
+  interview: one(interviews, { fields: [candidateOnboardingTasks.interviewId], references: [interviews.id] }),
 }))
 
 // Interview Relations

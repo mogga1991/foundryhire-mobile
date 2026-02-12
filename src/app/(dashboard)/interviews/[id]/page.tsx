@@ -45,6 +45,7 @@ import { TranscriptViewer } from '@/components/interviews/transcript-viewer'
 import { RecordingPlayer } from '@/components/interviews/recording-player'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { InterviewErrorFallback } from '@/components/interviews/interview-error-fallback'
+import { OfferExpiryControls } from '@/components/interviews/offer-expiry-controls'
 
 export const metadata = {
   title: 'Interview Details | VerticalHire',
@@ -74,6 +75,7 @@ export default async function InterviewDetailPage({ params }: InterviewDetailPag
       scheduledAt: interviews.scheduledAt,
       durationMinutes: interviews.durationMinutes,
       status: interviews.status,
+      candidatePortalExpiresAt: interviews.candidatePortalExpiresAt,
       zoomMeetingId: interviews.zoomMeetingId,
       zoomJoinUrl: interviews.zoomJoinUrl,
       zoomStartUrl: interviews.zoomStartUrl,
@@ -91,6 +93,7 @@ export default async function InterviewDetailPage({ params }: InterviewDetailPag
       candidateEmail: candidates.email,
       candidateProfileImage: candidates.profileImageUrl,
       candidateTitle: candidates.currentTitle,
+      candidateStage: candidates.stage,
       jobId: jobs.id,
       jobTitle: jobs.title,
       companyName: companies.name,
@@ -482,6 +485,11 @@ export default async function InterviewDetailPage({ params }: InterviewDetailPag
               <CardTitle className="text-base">Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              <OfferExpiryControls
+                interviewId={interview.id}
+                candidateName={candidateName}
+                currentExpiresAt={interview.candidatePortalExpiresAt?.toISOString() || null}
+              />
               {!isCompleted && (
                 <Button variant="outline" className="w-full gap-2" asChild>
                   <Link href={`/candidates/${interview.candidateId}`}>

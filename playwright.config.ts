@@ -1,5 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const sanitizedEnv = { ...process.env }
+delete sanitizedEnv.NO_COLOR
+delete process.env.NO_COLOR
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -22,5 +26,6 @@ export default defineConfig({
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
+    env: sanitizedEnv,
   },
 })

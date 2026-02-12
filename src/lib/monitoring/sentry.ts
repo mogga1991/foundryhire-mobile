@@ -15,6 +15,14 @@ export interface ErrorContext {
 // @ts-ignore - Sentry is an optional dependency
 let sentryModule: typeof import('@sentry/nextjs') | null | undefined = undefined
 
+type DynamicImportFn = (modulePath: string) => Promise<unknown>
+
+// Use runtime dynamic import to avoid build-time module resolution errors when Sentry is not installed.
+const runtimeImport: DynamicImportFn = new Function(
+  'modulePath',
+  'return import(modulePath)'
+) as DynamicImportFn
+
 /**
  * Attempt to load @sentry/nextjs dynamically.
  * Returns null if the package is not installed (graceful degradation).
@@ -25,8 +33,7 @@ async function getSentry(): Promise<typeof import('@sentry/nextjs') | null> {
     return sentryModule
   }
   try {
-    // @ts-ignore - Sentry is an optional dependency
-    sentryModule = await import('@sentry/nextjs')
+    sentryModule = await runtimeImport('@sentry/nextjs') as typeof import('@sentry/nextjs')
     return sentryModule
   } catch {
     sentryModule = null

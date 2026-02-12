@@ -17,6 +17,17 @@ test.describe('Candidate Portal - API Routes', () => {
     const body = await response.json()
     expect(body.error).toBeTruthy()
   })
+
+  test('candidate interview confirmation endpoint is accessible without auth session', async ({ request }) => {
+    const response = await request.post('/api/interviews/candidate/nonexistent-token-12345', {
+      data: { status: 'confirmed' },
+    })
+
+    // Endpoint should be reachable and token-gated, not blocked by CSRF/auth middleware.
+    expect(response.status()).not.toBe(401)
+    expect(response.status()).not.toBe(403)
+    expect(response.status()).not.toBe(405)
+  })
 })
 
 test.describe('Candidate Portal - UI Pages', () => {

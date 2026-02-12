@@ -101,6 +101,7 @@ const updateInterviewSchema = z.object({
   cancelReason: z.string().max(500).optional(),
   internalNotes: z.string().max(2000).optional(),
   expectedStatus: z.enum(['scheduled', 'in_progress', 'completed', 'cancelled']).optional(),
+  candidatePortalExpiresAt: z.string().datetime().optional(),
   // Other fields allowed for AI/recording updates
   recordingUrl: z.string().url().optional(),
   transcript: z.string().optional(),
@@ -242,9 +243,6 @@ async function _PATCH(
         try {
           await deleteZoomMeeting(existing.zoomMeetingId)
         } catch (error) {
-    if (error instanceof SyntaxError) {
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
-    }
           logger.error({ message: 'Failed to delete old Zoom meeting', error })
           // Continue - this is not critical
         }
@@ -265,9 +263,6 @@ async function _PATCH(
         updateData.zoomStartUrl = zoomMeeting.startUrl
         updateData.passcode = zoomMeeting.password
       } catch (error) {
-    if (error instanceof SyntaxError) {
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
-    }
         logger.error({ message: 'Failed to create new Zoom meeting', error })
         // Continue without Zoom meeting - this is not critical
       }
@@ -276,9 +271,6 @@ async function _PATCH(
       try {
         await cancelReminders(interviewId)
       } catch (error) {
-    if (error instanceof SyntaxError) {
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
-    }
         logger.error({ message: 'Failed to cancel old reminders', error })
       }
     }
@@ -286,6 +278,12 @@ async function _PATCH(
     // Apply other allowed fields with sanitization
     if (body.durationMinutes !== undefined) updateData.durationMinutes = body.durationMinutes
     if (body.status !== undefined) updateData.status = body.status
+    if (body.candidatePortalExpiresAt !== undefined) {
+      updateData.candidatePortalExpiresAt = new Date(body.candidatePortalExpiresAt)
+    }
+    if (body.status === 'cancelled') {
+      updateData.candidatePortalExpiresAt = new Date()
+    }
     if (body.cancelReason !== undefined) {
       updateData.cancelReason = sanitizeUserInput(body.cancelReason, { maxLength: 500, allowNewlines: false })
     }
@@ -462,6 +460,7 @@ async function _DELETE(
       .set({
         status: 'cancelled',
         cancelReason: cancelReason || 'Interview cancelled',
+        candidatePortalExpiresAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(interviews.id, interviewId))
@@ -471,9 +470,6 @@ async function _DELETE(
       try {
         await deleteZoomMeeting(existing.zoomMeetingId)
       } catch (error) {
-    if (error instanceof SyntaxError) {
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
-    }
         logger.error({ message: 'Failed to delete Zoom meeting', error })
         // Continue - this is not critical
       }
@@ -483,9 +479,6 @@ async function _DELETE(
     try {
       await cancelReminders(interviewId)
     } catch (error) {
-    if (error instanceof SyntaxError) {
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
-    }
       logger.error({ message: 'Failed to cancel reminders', error })
     }
 

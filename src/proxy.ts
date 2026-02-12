@@ -45,6 +45,30 @@ function hasEmployerSessionCookie(request: NextRequest): boolean {
     .some((cookie) => cookie.name.startsWith('sb-') && cookie.name.includes('-auth-token'))
 }
 
+function isPublicCandidatePortalPath(pathname: string): boolean {
+  // Candidate interview links are single-segment tokens, e.g. /portal/<token>.
+  // Keep nested portal routes protected by candidate auth.
+  const match = pathname.match(/^\/portal\/([^/]+)$/)
+  if (!match) {
+    return false
+  }
+
+  const tokenSegment = match[1]
+  const reservedSegments = new Set([
+    'login',
+    'register',
+    'forgot-password',
+    'reset-password',
+    'verify-email',
+    'notifications',
+    'dashboard',
+    'profile',
+    'settings',
+  ])
+
+  return !reservedSegments.has(tokenSegment)
+}
+
 /**
  * Validate CSRF token at the middleware level (defense-in-depth)
  * Uses simple double-submit cookie pattern validation
@@ -69,6 +93,7 @@ function validateCsrfInMiddleware(
     '/api/webhooks/',
     '/api/auth/',
     '/api/portal/',
+    '/api/interviews/candidate/',
     '/api/csrf',
     '/api/cron/',
     '/api/candidate/',
@@ -102,7 +127,7 @@ function validateCsrfInMiddleware(
   return null // Valid
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const hasEmployerSession = hasEmployerSessionCookie(request)
   const candidateSessionToken = request.cookies.get('candidate_session_token')?.value
@@ -120,7 +145,7 @@ export function middleware(request: NextRequest) {
   let response: NextResponse
 
   // Allow public routes
-  if (isPublicRoute(pathname)) {
+  if (isPublicRoute(pathname) || isPublicCandidatePortalPath(pathname)) {
     response = NextResponse.next()
   }
   // Portal routes require candidate session

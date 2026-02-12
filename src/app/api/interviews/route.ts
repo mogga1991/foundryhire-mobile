@@ -14,6 +14,7 @@ import { notifyInterviewScheduled } from '@/lib/services/notifications'
 import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
 import { escapeLikePattern } from '@/lib/utils/sql-escape'
 import { createLogger } from '@/lib/logger'
+import { getDefaultPortalExpiry } from '@/lib/candidate/workspace-lifecycle'
 
 const logger = createLogger('api:interviews')
 
@@ -149,8 +150,7 @@ async function _POST(request: NextRequest) {
 
     // Generate portal token for candidate
     const portalToken = crypto.randomBytes(32).toString('hex')
-    const portalExpiresAt = new Date(scheduledDate)
-    portalExpiresAt.setDate(portalExpiresAt.getDate() + 7)
+    const portalExpiresAt = getDefaultPortalExpiry(scheduledDate)
 
     // Create the interview
     const [interview] = await db.insert(interviews).values({

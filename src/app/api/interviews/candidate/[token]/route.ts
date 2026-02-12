@@ -5,6 +5,7 @@ import { eq, and, gt } from 'drizzle-orm'
 import { rateLimit, RateLimitPresets, getEndpointIdentifier } from '@/lib/rate-limit'
 import { createLogger } from '@/lib/logger'
 import { withApiMiddleware } from '@/lib/middleware/api-wrapper'
+import { resolveCandidateWorkspaceStatus } from '@/lib/candidate/workspace-lifecycle'
 
 const logger = createLogger('api:interview-candidate-portal')
 
@@ -28,6 +29,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         location: interviews.location,
         phoneNumber: interviews.phoneNumber,
         status: interviews.status,
+        candidatePortalExpiresAt: interviews.candidatePortalExpiresAt,
         passcode: interviews.passcode,
         zoomJoinUrl: interviews.zoomJoinUrl,
         zoomMeetingId: interviews.zoomMeetingId,
@@ -35,6 +37,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         candidateFirstName: candidates.firstName,
         candidateLastName: candidates.lastName,
         candidateEmail: candidates.email,
+        candidateStage: candidates.stage,
         companyName: companies.name,
         companyWebsite: companies.website,
         companyId: interviews.companyId,
@@ -107,6 +110,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         location: interview.location,
         phoneNumber: interview.phoneNumber,
         status: interview.status,
+        lifecycleStatus: resolveCandidateWorkspaceStatus({
+          interviewStatus: interview.status,
+          candidateStage: interview.candidateStage,
+          scheduledAt: interview.scheduledAt,
+          expiresAt: interview.candidatePortalExpiresAt,
+        }),
         passcode: interview.passcode,
         zoomJoinUrl: interview.zoomJoinUrl,
         zoomMeetingId: interview.zoomMeetingId,
@@ -292,6 +301,7 @@ async function _POST(request: NextRequest, { params }: RouteParams) {
         .set({
           status: 'cancelled',
           cancelReason: declineReason || 'Candidate declined',
+          candidatePortalExpiresAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(interviews.id, interview.id))

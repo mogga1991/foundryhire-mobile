@@ -35,6 +35,7 @@ import {
   candidateActivities,
   campaignSends,
   campaigns,
+  interviews,
 } from '@/lib/db/schema'
 import { eq, and, desc } from 'drizzle-orm'
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,7 @@ import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { OfferExpiryControls } from '@/components/interviews/offer-expiry-controls'
 
 export const metadata = {
   title: 'Candidate Profile | VerticalHire',
@@ -185,6 +187,23 @@ export default async function CandidateDetailPage({ params }: CandidateDetailPag
     .where(eq(campaignSends.candidateId, candidateId))
     .orderBy(desc(campaignSends.sentAt))
     .limit(10)
+
+  const [latestInterview] = await db
+    .select({
+      id: interviews.id,
+      scheduledAt: interviews.scheduledAt,
+      candidatePortalExpiresAt: interviews.candidatePortalExpiresAt,
+      status: interviews.status,
+    })
+    .from(interviews)
+    .where(
+      and(
+        eq(interviews.candidateId, candidateId),
+        eq(interviews.companyId, companyUser.companyId)
+      )
+    )
+    .orderBy(desc(interviews.scheduledAt))
+    .limit(1)
 
   const fullName = `${candidate.firstName} ${candidate.lastName}`.trim()
   const initials =
@@ -871,6 +890,14 @@ export default async function CandidateDetailPage({ params }: CandidateDetailPag
                 variant="outline"
                 className="w-full gap-2"
               />
+
+              {latestInterview && (
+                <OfferExpiryControls
+                  interviewId={latestInterview.id}
+                  candidateName={fullName}
+                  currentExpiresAt={latestInterview.candidatePortalExpiresAt?.toISOString() || null}
+                />
+              )}
 
               <Button variant="outline" className="w-full gap-2">
                 <FileText className="h-4 w-4" />
