@@ -23,9 +23,15 @@ export const users = pgTable('users', {
   emailVerified: timestamp('email_verified', { withTimezone: true }),
   image: text('image'),
   passwordHash: text('password_hash'),
+  // Clerk user ID mapping (string, e.g. "user_...")
+  clerkUserId: text('clerk_user_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+}, (table) => [
+  uniqueIndex('users_clerk_user_id_unique')
+    .on(table.clerkUserId)
+    .where(sql`${table.clerkUserId} IS NOT NULL`),
+])
 
 export const accounts = pgTable('accounts', {
   id: uuid('id').defaultRandom().primaryKey(),
