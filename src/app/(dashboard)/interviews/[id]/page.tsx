@@ -56,7 +56,7 @@ interface InterviewDetailPageProps {
 }
 
 export default async function InterviewDetailPage({ params }: InterviewDetailPageProps) {
-  const session = await getSession()
+  const session = await getSession({ allowGuest: true })
   if (!session) redirect('/login')
 
   const { id: interviewId } = await params

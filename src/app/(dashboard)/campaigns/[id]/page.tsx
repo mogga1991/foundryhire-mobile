@@ -41,7 +41,7 @@ interface CampaignDetailPageProps {
 }
 
 export default async function CampaignDetailPage({ params }: CampaignDetailPageProps) {
-  const session = await getSession()
+  const session = await getSession({ allowGuest: true })
   if (!session) redirect('/login')
 
   const { id: campaignId } = await params

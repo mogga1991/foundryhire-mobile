@@ -76,7 +76,7 @@ interface CandidateDetailPageProps {
 }
 
 export default async function CandidateDetailPage({ params }: CandidateDetailPageProps) {
-  const session = await getSession()
+  const session = await getSession({ allowGuest: true })
 
   if (!session) {
     redirect('/login')

@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
-import { eq, asc } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { createLogger } from '@/lib/logger'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
@@ -10,6 +10,23 @@ const logger = createLogger('auth')
 
 const LEGACY_CONFLICT_ERROR =
   'This account exists in a legacy auth format. Run a user migration to Supabase IDs before signing in.'
+
+const GUEST_SESSION = {
+  user: {
+    id: '00000000-0000-0000-0000-000000000000',
+    email: 'guest@verticalhire.local',
+    name: 'Guest',
+    image: null,
+  },
+} as const
+
+type SessionResult = {
+  user: { id: string; email: string; name: string | null; image: string | null }
+}
+
+export type GetSessionOptions = {
+  allowGuest?: boolean
+}
 
 export function getLegacyAuthConflictErrorMessage(): string {
   return LEGACY_CONFLICT_ERROR
@@ -76,9 +93,9 @@ export async function syncSupabaseUser(authUser: SupabaseUser): Promise<{
   }
 }
 
-export async function getSession(): Promise<{
-  user: { id: string; email: string; name: string | null; image: string | null }
-} | null> {
+export async function getSession(options: GetSessionOptions = {}): Promise<SessionResult | null> {
+  const allowGuest = options.allowGuest ?? false
+
   try {
     // Prefer Clerk session if present.
     // We map Clerk user IDs to our local `users.id` UUID via `users.clerkUserId`.
@@ -206,36 +223,7 @@ export async function getSession(): Promise<{
     } = await supabase.auth.getUser()
 
     if (error || !authUser) {
-      const [fallbackUser] = await db
-        .select({
-          id: users.id,
-          email: users.email,
-          name: users.name,
-          image: users.image,
-        })
-        .from(users)
-        .orderBy(asc(users.createdAt))
-        .limit(1)
-
-      if (!fallbackUser) {
-        return {
-          user: {
-            id: '00000000-0000-0000-0000-000000000000',
-            email: 'guest@verticalhire.local',
-            name: 'Guest',
-            image: null,
-          },
-        }
-      }
-
-      return {
-        user: {
-          id: fallbackUser.id,
-          email: fallbackUser.email,
-          name: fallbackUser.name,
-          image: fallbackUser.image,
-        },
-      }
+      return allowGuest ? GUEST_SESSION : null
     }
 
     const [dbUser] = await db
@@ -267,14 +255,7 @@ export async function getSession(): Promise<{
     }
   } catch (error) {
     logger.error({ error }, 'Failed to load employer session')
-    return {
-      user: {
-        id: '00000000-0000-0000-0000-000000000000',
-        email: 'guest@verticalhire.local',
-        name: 'Guest',
-        image: null,
-      },
-    }
+    return allowGuest ? GUEST_SESSION : null
   }
 }
 

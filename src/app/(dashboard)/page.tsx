@@ -49,7 +49,7 @@ const statusConfig: Record<
 }
 
 export default async function DashboardHomePage() {
-  const session = await getSession()
+  const session = await getSession({ allowGuest: true })
 
   if (!session) {
     redirect('/login')

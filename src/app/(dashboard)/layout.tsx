@@ -8,7 +8,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const session = await getSession()
+  const session = await getSession({ allowGuest: true })
 
   const sidebarUser = {
     id: session?.user.id ?? 'guest',

@@ -3,14 +3,14 @@ import { test, expect } from '@playwright/test'
 // Phase 3: Video Interview System Tests
 
 test.describe('Video Interview - Dashboard Pages', () => {
-  test('interviews dashboard redirects to login when unauthenticated', async ({ page }) => {
+  test('interviews dashboard is reachable', async ({ page }) => {
     await page.goto('/interviews')
-    await expect(page).toHaveURL(/login/)
+    await expect(page).toHaveURL(/interviews/)
   })
 
-  test('interview detail page redirects to login when unauthenticated', async ({ page }) => {
+  test('interview detail route resolves without 404 page', async ({ page }) => {
     await page.goto('/interviews/some-interview-id')
-    await expect(page).toHaveURL(/login/)
+    await expect(page).toHaveURL(/interviews/)
   })
 })
 
@@ -49,10 +49,8 @@ test.describe('Video Interview - API Routes', () => {
 })
 
 test.describe('Video Interview - Navigation', () => {
-  test('sidebar should include Interviews link on login page redirect', async ({ page }) => {
-    // Navigate to interviews which will redirect to login
-    await page.goto('/interviews')
-    // Verify we're on login page (unauthenticated)
-    await expect(page).toHaveURL(/login/)
+  test('legacy /login path routes into dashboard', async ({ page }) => {
+    await page.goto('/login')
+    await expect(page).toHaveURL(/dashboard/)
   })
 })

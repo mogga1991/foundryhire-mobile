@@ -258,7 +258,7 @@ const activityTypeMap: Record<string, ActivityType> = {
 }
 
 export default async function DashboardPage() {
-  const session = await getSession()
+  const session = await getSession({ allowGuest: true })
 
   if (!session) {
     redirect('/login')

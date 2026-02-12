@@ -16,7 +16,7 @@ export const metadata = {
 }
 
 export default async function QuestionBankPage() {
-  const session = await getSession()
+  const session = await getSession({ allowGuest: true })
   if (!session) redirect('/login')
 
   const [companyUser] = await db

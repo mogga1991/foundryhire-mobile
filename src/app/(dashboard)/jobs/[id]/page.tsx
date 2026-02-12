@@ -59,7 +59,7 @@ function formatSalary(min: number | null, max: number | null, currency: string |
 
 export default async function JobDetailPage({ params }: JobDetailPageProps) {
   const { id } = await params
-  const session = await getSession()
+  const session = await getSession({ allowGuest: true })
 
   if (!session) {
     redirect('/login')

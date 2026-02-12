@@ -16,13 +16,14 @@ import {
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { candidates, companyUsers } from '@/lib/db/schema'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, and, sql } from 'drizzle-orm'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { GenerateLeadsDialog } from '@/components/candidates/generate-leads-dialog'
 import { CsvImportDialog } from '@/components/candidates/csv-import-dialog'
+import { LeadPoolImportDialog } from '@/components/candidates/lead-pool-import-dialog'
 import { EnrichmentStatus } from '@/components/candidates/enrichment-status'
 import { DeleteCandidateButton } from '@/components/candidates/delete-candidate-button'
 import {
@@ -48,7 +49,7 @@ export const metadata = {
 }
 
 export default async function CandidatesPage() {
-  const session = await getSession()
+  const session = await getSession({ allowGuest: true })
 
   if (!session) {
     redirect('/login')
@@ -114,10 +115,17 @@ export default async function CandidatesPage() {
 
   const totalCandidates = candidatesList.length
   const highScoringCount = candidatesList.filter(c => (c.aiScore || 0) > 75).length
-  const recentCount = candidatesList.filter(c => {
-    const daysSinceCreated = Math.floor((Date.now() - c.createdAt.getTime()) / (1000 * 60 * 60 * 24))
-    return daysSinceCreated <= 7
-  }).length
+  const [recentCountResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(candidates)
+    .where(
+      and(
+        eq(candidates.companyId, companyUser.companyId),
+        sql`${candidates.createdAt} >= now() - interval '7 days'`
+      )
+    )
+
+  const recentCount = recentCountResult?.count ?? 0
 
   return (
     <div className="space-y-6">
@@ -132,6 +140,7 @@ export default async function CandidatesPage() {
         <div className="flex items-center gap-3">
           <GenerateLeadsDialog />
           <CsvImportDialog />
+          <LeadPoolImportDialog />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
