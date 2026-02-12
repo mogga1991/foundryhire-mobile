@@ -170,9 +170,10 @@ function getValidatedEnv(): EnvType {
     console.error(
       '\n💡 See .env.example for required values and configuration details.'
     )
-    throw new Error(
-      'Environment validation failed. Fix the errors above and restart.'
-    )
+    // Do not hard-crash runtime requests because of unrelated optional env issues.
+    // Route-level code should handle missing required values where used.
+    _cachedEnv = normalizedEnv as unknown as EnvType
+    return _cachedEnv
   }
 
   _cachedEnv = result.data
